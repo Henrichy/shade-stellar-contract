@@ -8,10 +8,9 @@ pub fn add_accepted_token(env: &Env, admin: &Address, token: &Address) {
     reentrancy::enter(env);
     core::assert_admin(env, admin);
 
-    let _ = token::Client::new(env, token).symbol();
-
     let mut accepted_tokens = get_accepted_tokens(env);
     if !contains_token(&accepted_tokens, token) {
+        let _ = token::Client::new(env, token).symbol();
         accepted_tokens.push_back(token.clone());
         env.storage()
             .persistent()
@@ -30,8 +29,8 @@ pub fn add_accepted_tokens(env: &Env, admin: &Address, tokens: &Vec<Address>) {
     let timestamp = env.ledger().timestamp();
 
     for token in tokens.iter() {
-        let _ = token::Client::new(env, &token).symbol();
         if !contains_token(&accepted_tokens, &token) {
+            let _ = token::Client::new(env, &token).symbol();
             accepted_tokens.push_back(token.clone());
             events::publish_token_added_event(env, token.clone(), timestamp);
             changed = true;

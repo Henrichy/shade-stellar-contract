@@ -2,7 +2,7 @@
 
 use crate::shade::{Shade, ShadeClient};
 use crate::types::{InvoiceStatus, Role};
-use soroban_sdk::testutils::{Address as _, Events as_};
+use soroban_sdk::testutils::{Address as _, Events as _};
 use soroban_sdk::{Address, BytesN, Env, Map, String, Symbol, TryIntoVal, Val};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -37,10 +37,7 @@ fn generate_signature(env: &Env) -> BytesN<64> {
 }
 
 /// Sets up a registered merchant with a key stored
-fn setup_merchant_with_key(
-    env: &Env,
-    client: &ShadeClient,
-) -> (Address, BytesN<32>) {
+fn setup_merchant_with_key(env: &Env, client: &ShadeClient) -> (Address, BytesN<32>) {
     let merchant = Address::generate(env);
     client.register_merchant(&merchant);
 
