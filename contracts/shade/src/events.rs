@@ -210,6 +210,7 @@ pub fn publish_merchant_key_set_event(
 
 #[contractevent]
 pub struct RoleGrantedEvent {
+    pub admin: Address,
     pub user: Address,
     pub role: crate::types::Role,
     pub timestamp: u64,
@@ -217,11 +218,13 @@ pub struct RoleGrantedEvent {
 
 pub fn publish_role_granted_event(
     env: &Env,
+    admin: Address,
     user: Address,
     role: crate::types::Role,
     timestamp: u64,
 ) {
     RoleGrantedEvent {
+        admin,
         user,
         role,
         timestamp,
@@ -231,6 +234,7 @@ pub fn publish_role_granted_event(
 
 #[contractevent]
 pub struct RoleRevokedEvent {
+    pub admin: Address,
     pub user: Address,
     pub role: crate::types::Role,
     pub timestamp: u64,
@@ -238,11 +242,13 @@ pub struct RoleRevokedEvent {
 
 pub fn publish_role_revoked_event(
     env: &Env,
+    admin: Address,
     user: Address,
     role: crate::types::Role,
     timestamp: u64,
 ) {
     RoleRevokedEvent {
+        admin,
         user,
         role,
         timestamp,
