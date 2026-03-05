@@ -4,6 +4,9 @@ use crate::events;
 use crate::types::{DataKey, Subscription, SubscriptionPlan, SubscriptionStatus};
 use soroban_sdk::{panic_with_error, token, Address, Env, String};
 
+// TODO: create a functionality for bulk subscription plan charging
+// TODO: create a functionality for charging all the subscription in a plan
+
 fn get_plan_count(env: &Env) -> u64 {
     env.storage()
         .persistent()
@@ -25,14 +28,6 @@ fn get_merchant_id(env: &Env, merchant: &Address) -> u64 {
         .unwrap_or_else(|| panic_with_error!(env, ContractError::MerchantNotFound))
 }
 
-fn get_fee_for_amount(env: &Env, token: &Address, amount: i128) -> i128 {
-    let fee_bps: i128 = admin::get_fee(env, token);
-    if fee_bps == 0 {
-        return 0;
-    }
-    (amount * fee_bps) / 10_000i128
-}
-
 pub fn create_subscription_plan(
     env: &Env,
     merchant: Address,
@@ -50,6 +45,11 @@ pub fn create_subscription_plan(
     }
     if !admin::is_accepted_token(env, &token) {
         panic_with_error!(env, ContractError::TokenNotAccepted);
+    }
+
+    let fee_amount = admin::get_fee_for_amount(env, &token, amount);
+    if amount < fee_amount {
+        panic_with_error!(env, ContractError::InvalidAmount);
     }
 
     let merchant_id = get_merchant_id(env, &merchant);
@@ -92,6 +92,8 @@ pub fn get_subscription_plan(env: &Env, plan_id: u64) -> SubscriptionPlan {
 }
 
 pub fn subscribe(env: &Env, customer: Address, plan_id: u64) -> u64 {
+    // TODO: determine if a customer is allowed to subscribe more than once to the same plan
+    // and if so, create a storage for saving the subcription ids of a plan in a list
     let plan = get_subscription_plan(env, plan_id);
     if !plan.active {
         panic_with_error!(env, ContractError::PlanNotActive);
@@ -139,7 +141,7 @@ pub fn charge_subscription(env: &Env, subscription_id: u64) {
         panic_with_error!(env, ContractError::ChargeTooEarly);
     }
 
-    let fee = get_fee_for_amount(env, &plan.token, plan.amount);
+    let fee = admin::get_fee_for_amount(env, &plan.token, plan.amount);
     let merchant_amount = plan.amount - fee;
 
     let token_client = token::TokenClient::new(env, &plan.token);
@@ -194,4 +196,17 @@ pub fn cancel_subscription(env: &Env, caller: Address, subscription_id: u64) {
         caller,
         env.ledger().timestamp(),
     );
+}
+
+pub fn deactivate_plan(env: &Env, caller: Address, plan_id: u64) {
+    caller.require_auth();
+    let mut plan = get_subscription_plan(env, plan_id);
+    if plan.merchant != caller {
+        panic_with_error!(env, ContractError::NotAuthorized);
+    }
+    plan.active = false;
+    env.storage()
+        .persistent()
+        .set(&DataKey::SubscriptionPlan(plan_id), &plan);
+    events::publish_plan_deactivated_event(env, plan_id, caller, env.ledger().timestamp());
 }

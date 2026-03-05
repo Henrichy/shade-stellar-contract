@@ -1,17 +1,22 @@
+use crate::errors::ContractError;
 use crate::events;
+use crate::types::DataKey;
+use soroban_sdk::panic_with_error;
 use soroban_sdk::{Address, Bytes, BytesN, Env, IntoVal};
 
-pub fn deploy_account(
-    env: &Env,
-    merchant: Address,
-    manager: Address,
-    merchant_id: u64,
-    wasm_hash: BytesN<32>,
-) -> Address {
+pub fn deploy_account(env: &Env, merchant: Address, merchant_id: u64) -> Address {
     // Generate a random salt for deployment.
+    let manager = env.current_contract_address();
     let random_bytes_n: BytesN<32> = env.prng().gen();
     let random_bytes = Bytes::from_slice(env, &random_bytes_n.to_array());
     let salt = env.crypto().keccak256(&random_bytes);
+    let wasm_hash: BytesN<32> = env
+        .storage()
+        .persistent()
+        .get(&DataKey::AccountWasmHash)
+        .unwrap_or_else(|| {
+            panic_with_error!(env, ContractError::WasmHashNotSet);
+        });
 
     let deployed_contract = env
         .deployer()

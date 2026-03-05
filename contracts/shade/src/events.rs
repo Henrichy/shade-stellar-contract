@@ -210,6 +210,7 @@ pub fn publish_merchant_key_set_event(
 
 #[contractevent]
 pub struct RoleGrantedEvent {
+    pub admin: Address,
     pub user: Address,
     pub role: crate::types::Role,
     pub timestamp: u64,
@@ -217,11 +218,13 @@ pub struct RoleGrantedEvent {
 
 pub fn publish_role_granted_event(
     env: &Env,
+    admin: Address,
     user: Address,
     role: crate::types::Role,
     timestamp: u64,
 ) {
     RoleGrantedEvent {
+        admin,
         user,
         role,
         timestamp,
@@ -231,6 +234,7 @@ pub fn publish_role_granted_event(
 
 #[contractevent]
 pub struct RoleRevokedEvent {
+    pub admin: Address,
     pub user: Address,
     pub role: crate::types::Role,
     pub timestamp: u64,
@@ -238,11 +242,13 @@ pub struct RoleRevokedEvent {
 
 pub fn publish_role_revoked_event(
     env: &Env,
+    admin: Address,
     user: Address,
     role: crate::types::Role,
     timestamp: u64,
 ) {
     RoleRevokedEvent {
+        admin,
         user,
         role,
         timestamp,
@@ -272,13 +278,15 @@ pub fn publish_contract_unpaused_event(env: &Env, admin: Address, timestamp: u64
 
 #[contractevent]
 pub struct FeeSetEvent {
+    pub admin: Address,
     pub token: Address,
     pub fee: i128,
     pub timestamp: u64,
 }
 
-pub fn publish_fee_set_event(env: &Env, token: Address, fee: i128, timestamp: u64) {
+pub fn publish_fee_set_event(env: &Env, admin: Address, token: Address, fee: i128, timestamp: u64) {
     FeeSetEvent {
+        admin,
         token,
         fee,
         timestamp,
@@ -546,6 +554,43 @@ pub fn publish_subscription_cancelled_event(
     SubscriptionCancelledEvent {
         subscription_id,
         caller,
+        timestamp,
+    }
+    .publish(env);
+}
+
+#[contractevent]
+pub struct AccountWasmHashSetEvent {
+    pub admin: Address,
+    pub wasm_hash: BytesN<32>,
+    pub timestamp: u64,
+}
+
+pub fn publish_account_wasm_hash_set_event(
+    env: &Env,
+    admin: Address,
+    wasm_hash: BytesN<32>,
+    timestamp: u64,
+) {
+    AccountWasmHashSetEvent {
+        admin,
+        wasm_hash,
+        timestamp,
+    }
+    .publish(env);
+}
+
+#[contractevent]
+pub struct PlanDeactivatedEvent {
+    pub plan_id: u64,
+    pub merchant: Address,
+    pub timestamp: u64,
+}
+
+pub fn publish_plan_deactivated_event(env: &Env, plan_id: u64, merchant: Address, timestamp: u64) {
+    PlanDeactivatedEvent {
+        plan_id,
+        merchant,
         timestamp,
     }
     .publish(env);

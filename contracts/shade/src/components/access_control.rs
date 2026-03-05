@@ -10,7 +10,13 @@ pub fn grant_role(env: &Env, admin: &Address, user: &Address, role: Role) {
         .persistent()
         .set(&DataKey::Role(user.clone(), role.clone()), &true);
 
-    events::publish_role_granted_event(env, user.clone(), role, env.ledger().timestamp());
+    events::publish_role_granted_event(
+        env,
+        admin.clone(),
+        user.clone(),
+        role,
+        env.ledger().timestamp(),
+    );
 }
 
 pub fn revoke_role(env: &Env, admin: &Address, user: &Address, role: Role) {
@@ -20,7 +26,13 @@ pub fn revoke_role(env: &Env, admin: &Address, user: &Address, role: Role) {
         .persistent()
         .remove(&DataKey::Role(user.clone(), role.clone()));
 
-    events::publish_role_revoked_event(env, user.clone(), role, env.ledger().timestamp());
+    events::publish_role_revoked_event(
+        env,
+        admin.clone(),
+        user.clone(),
+        role,
+        env.ledger().timestamp(),
+    );
 }
 
 pub fn has_role(env: &Env, user: &Address, role: Role) -> bool {

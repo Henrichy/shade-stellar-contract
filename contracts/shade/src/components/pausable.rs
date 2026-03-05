@@ -4,6 +4,11 @@ use crate::events;
 use crate::types::DataKey;
 use soroban_sdk::{panic_with_error, Address, Env};
 
+// TODO: create a more complex pausable functionality that comprises of pausing and unpausing particularly
+// functionality of the contract like specifically pausing subscription, merchant, plan, payments and withdrawals etc.
+// This way, when a particular functionality is paused, other functionalities of the contract will not be affected.
+// unlike the current implementation where the entire contract is paused.
+
 pub fn pause(env: &Env, admin: &Address) {
     admin.require_auth();
 
