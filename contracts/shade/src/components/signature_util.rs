@@ -17,15 +17,15 @@ fn build_message(
 ) -> Bytes {
     let mut msg = Bytes::new(env);
     msg.append(&env.current_contract_address().to_xdr(env));
-    msg.append(&Bytes::from_array(env, &[b'|']));
+    msg.append(&Bytes::from_array(env, b"|"));
     msg.append(&merchant.clone().to_xdr(env));
-    msg.append(&Bytes::from_array(env, &[b'|']));
+    msg.append(&Bytes::from_array(env, b"|"));
     msg.append(nonce.as_ref());
-    msg.append(&Bytes::from_array(env, &[b'|']));
+    msg.append(&Bytes::from_array(env, b"|"));
     msg.append(&Bytes::from_slice(env, &amount.to_be_bytes()));
-    msg.append(&Bytes::from_array(env, &[b'|']));
+    msg.append(&Bytes::from_array(env, b"|"));
     msg.append(&token.clone().to_xdr(env));
-    msg.append(&Bytes::from_array(env, &[b'|']));
+    msg.append(&Bytes::from_array(env, b"|"));
     msg.append(&description.clone().to_xdr(env));
     msg
 }
