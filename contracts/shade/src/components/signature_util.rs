@@ -6,7 +6,7 @@ use soroban_sdk::{panic_with_error, Address, Bytes, BytesN, Env, String};
 
 /// Builds the message that the merchant must have signed.
 ///
-/// Format: [contract_address, merchant_address, nonce, amount, token_address, description_bytes]
+/// Format: "contract_address|merchant_address|nonce|amount|token_address|description_bytes"
 fn build_message(
     env: &Env,
     merchant: &Address,
@@ -17,10 +17,15 @@ fn build_message(
 ) -> Bytes {
     let mut msg = Bytes::new(env);
     msg.append(&env.current_contract_address().to_xdr(env));
+    msg.append(&Bytes::from_array(env, &[b'|']));
     msg.append(&merchant.clone().to_xdr(env));
+    msg.append(&Bytes::from_array(env, &[b'|']));
     msg.append(nonce.as_ref());
+    msg.append(&Bytes::from_array(env, &[b'|']));
     msg.append(&Bytes::from_slice(env, &amount.to_be_bytes()));
+    msg.append(&Bytes::from_array(env, &[b'|']));
     msg.append(&token.clone().to_xdr(env));
+    msg.append(&Bytes::from_array(env, &[b'|']));
     msg.append(&description.clone().to_xdr(env));
     msg
 }
@@ -44,6 +49,8 @@ pub fn verify_invoice_signature(
         .persistent()
         .get(&DataKey::MerchantKey(merchant.clone()))
         .unwrap_or_else(|| panic_with_error!(env, ContractError::MerchantKeyNotFound));
+
+    invalidate_nonce(env, merchant, nonce);
 
     let message = build_message(env, merchant, description, amount, token, nonce);
 

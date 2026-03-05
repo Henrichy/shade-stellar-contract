@@ -140,10 +140,7 @@ pub fn create_invoice_signed(
         signature,
     );
 
-    // 5. Invalidate nonce to prevent replay attacks
-    signature_util::invalidate_nonce(env, merchant, nonce);
-
-    // 6. Standard invoice creation
+    // Standard invoice creation
     let merchant_id: u64 = merchant::get_merchant_id(env, merchant);
 
     let invoice_count: u64 = env
