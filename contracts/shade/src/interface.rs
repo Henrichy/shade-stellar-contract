@@ -1,5 +1,6 @@
 use crate::types::{
-    Invoice, InvoiceFilter, Merchant, MerchantFilter, Role, Subscription, SubscriptionPlan,
+    Invoice, InvoiceFilter, Merchant, MerchantFilter, PendingFee, Role, Subscription,
+    SubscriptionPlan,
 };
 use soroban_sdk::{contracttrait, Address, BytesN, Env, String, Vec};
 
@@ -14,6 +15,9 @@ pub trait ShadeTrait {
     fn set_account_wasm_hash(env: Env, admin: Address, wasm_hash: soroban_sdk::BytesN<32>);
     fn set_fee(env: Env, admin: Address, token: Address, fee: i128);
     fn get_fee(env: Env, token: Address) -> i128;
+    fn propose_fee(env: Env, admin: Address, token: Address, fee: i128);
+    fn execute_fee(env: Env, admin: Address, token: Address);
+    fn get_pending_fee(env: Env, token: Address) -> PendingFee;
     fn register_merchant(env: Env, merchant: Address);
     fn get_merchant(env: Env, merchant_id: u64) -> Merchant;
     fn get_merchants(env: Env, filter: MerchantFilter) -> Vec<Merchant>;
