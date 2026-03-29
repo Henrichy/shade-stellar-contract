@@ -5,7 +5,7 @@ use crate::errors::ContractError;
 use crate::shade::Shade;
 use crate::shade::ShadeClient;
 use soroban_sdk::testutils::{Address as _, Events as _};
-use soroban_sdk::{Address, Env, Map, Symbol, TryIntoVal, Val, Vec};
+use soroban_sdk::{Address, BytesN, Env, Map, Symbol, TryIntoVal, Val, Vec};
 
 fn assert_latest_token_event(
     env: &Env,
@@ -44,7 +44,8 @@ fn test_admin_adds_token_and_emits_event() {
     let client = ShadeClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
-    client.initialize(&admin);
+    let wasm_hash = BytesN::from_array(&env, &[0; 32]);
+    client.initialize(&admin, &wasm_hash);
 
     let token_admin = Address::generate(&env);
     let token = env
@@ -76,7 +77,8 @@ fn test_batch_add_tokens() {
     let client = ShadeClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
-    client.initialize(&admin);
+    let wasm_hash = BytesN::from_array(&env, &[0; 32]);
+    client.initialize(&admin, &wasm_hash);
 
     let token_admin = Address::generate(&env);
     let token1 = env
@@ -110,7 +112,8 @@ fn test_admin_removes_token_and_emits_event() {
     let client = ShadeClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
-    client.initialize(&admin);
+    let wasm_hash = BytesN::from_array(&env, &[0; 32]);
+    client.initialize(&admin, &wasm_hash);
 
     let token_admin = Address::generate(&env);
     let token = env
@@ -147,7 +150,8 @@ fn test_duplicate_add_is_handled_gracefully() {
     let client = ShadeClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
-    client.initialize(&admin);
+    let wasm_hash = BytesN::from_array(&env, &[0; 32]);
+    client.initialize(&admin, &wasm_hash);
 
     let token_admin = Address::generate(&env);
     let token = env
@@ -173,7 +177,8 @@ fn test_non_admin_cannot_add_or_remove_tokens() {
 
     let admin = Address::generate(&env);
     let non_admin = Address::generate(&env);
-    client.initialize(&admin);
+    let wasm_hash = BytesN::from_array(&env, &[0; 32]);
+    client.initialize(&admin, &wasm_hash);
 
     let token_admin = Address::generate(&env);
     let token = env
@@ -202,7 +207,8 @@ fn test_invalid_token_address_panics() {
     let client = ShadeClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
-    client.initialize(&admin);
+    let wasm_hash = BytesN::from_array(&env, &[0; 32]);
+    client.initialize(&admin, &wasm_hash);
 
     let invalid_token = Address::generate(&env);
     client.add_accepted_token(&admin, &invalid_token);

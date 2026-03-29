@@ -5,7 +5,7 @@ use crate::errors::ContractError;
 use crate::shade::Shade;
 use crate::shade::ShadeClient;
 use soroban_sdk::testutils::{Address as _, Events as _};
-use soroban_sdk::{Address, Env, Map, Symbol, TryIntoVal, Val};
+use soroban_sdk::{Address, BytesN, Env, Map, Symbol, TryIntoVal, Val};
 
 fn setup_with_accepted_token(env: &Env) -> (Address, ShadeClient<'_>, Address) {
     env.mock_all_auths();
@@ -14,7 +14,8 @@ fn setup_with_accepted_token(env: &Env) -> (Address, ShadeClient<'_>, Address) {
     let client = ShadeClient::new(env, &contract_id);
 
     let admin = Address::generate(env);
-    client.initialize(&admin);
+    let wasm_hash = BytesN::from_array(&env, &[0; 32]);
+    client.initialize(&admin, &wasm_hash);
 
     let token_admin = Address::generate(env);
     let token = env
@@ -83,7 +84,8 @@ fn test_set_fee_unaccepted_token() {
     let client = ShadeClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
-    client.initialize(&admin);
+    let wasm_hash = BytesN::from_array(&env, &[0; 32]);
+    client.initialize(&admin, &wasm_hash);
 
     let unaccepted_token = Address::generate(&env);
 

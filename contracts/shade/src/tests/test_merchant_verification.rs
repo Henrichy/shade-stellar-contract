@@ -4,7 +4,7 @@ use crate::components::merchant as merchant_component;
 use crate::errors::ContractError;
 use crate::shade::{Shade, ShadeClient};
 use soroban_sdk::testutils::{Address as _, Events as _};
-use soroban_sdk::{Address, Env, Map, Symbol, TryIntoVal, Val};
+use soroban_sdk::{Address, BytesN, Env, Map, Symbol, TryIntoVal, Val};
 
 fn setup_test() -> (Env, ShadeClient<'static>, Address, Address) {
     let env = Env::default();
@@ -14,7 +14,8 @@ fn setup_test() -> (Env, ShadeClient<'static>, Address, Address) {
     let client = ShadeClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
-    client.initialize(&admin);
+    let wasm_hash = BytesN::from_array(&env, &[0; 32]);
+    client.initialize(&admin, &wasm_hash);
 
     (env, client, contract_id, admin)
 }

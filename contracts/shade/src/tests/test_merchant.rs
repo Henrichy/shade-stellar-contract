@@ -4,7 +4,7 @@ use crate::errors::ContractError;
 use crate::shade::{Shade, ShadeClient};
 use crate::types::DataKey;
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{Address, BytesN, Env};
 
 fn setup_test() -> (Env, ShadeClient<'static>, Address) {
     let env = Env::default();
@@ -14,7 +14,9 @@ fn setup_test() -> (Env, ShadeClient<'static>, Address) {
     let client = ShadeClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
-    client.initialize(&admin);
+    // Use a dummy hash for now. For registration tests, we'll need to upload the actual WASM.
+    let wasm_hash = BytesN::from_array(&env, &[0; 32]);
+    client.initialize(&admin, &wasm_hash);
 
     (env, client, contract_id)
 }

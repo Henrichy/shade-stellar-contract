@@ -4,7 +4,7 @@ use crate::shade::{Shade, ShadeClient};
 use crate::types::{DataKey, InvoiceStatus};
 use account::account::{MerchantAccount, MerchantAccountClient};
 use soroban_sdk::testutils::{Address as _, Ledger as _};
-use soroban_sdk::{token, Address, Env, String};
+use soroban_sdk::{token, Address, BytesN, Env, String};
 
 const INVOICE_AMOUNT: i128 = 1_000;
 const REFUND_WINDOW_SECS: u64 = 604_800;
@@ -15,7 +15,8 @@ fn setup_test() -> (Env, ShadeClient<'static>, Address, Address) {
     let contract_id = env.register(Shade, ());
     let client = ShadeClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
-    client.initialize(&admin);
+    let wasm_hash = BytesN::from_array(&env, &[0; 32]);
+    client.initialize(&admin, &wasm_hash);
     (env, client, contract_id, admin)
 }
 

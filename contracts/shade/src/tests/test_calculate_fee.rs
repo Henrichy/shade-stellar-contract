@@ -4,7 +4,7 @@ use crate::components::admin as admin_component;
 use crate::shade::Shade;
 use crate::shade::ShadeClient;
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{Address, BytesN, Env};
 
 fn setup(env: &Env) -> (Address, ShadeClient<'_>, Address) {
     env.mock_all_auths();
@@ -13,7 +13,8 @@ fn setup(env: &Env) -> (Address, ShadeClient<'_>, Address) {
     let client = ShadeClient::new(env, &contract_id);
 
     let admin = Address::generate(env);
-    client.initialize(&admin);
+    let wasm_hash = BytesN::from_array(&env, &[0; 32]);
+    client.initialize(&admin, &wasm_hash);
 
     let token_admin = Address::generate(env);
     let token = env

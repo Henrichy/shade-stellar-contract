@@ -4,7 +4,7 @@ use crate::shade::{Shade, ShadeClient};
 use crate::types::{DataKey, InvoiceStatus};
 use account::account::{MerchantAccount, MerchantAccountClient};
 use soroban_sdk::testutils::{Address as _, Events as _, Ledger as _};
-use soroban_sdk::{token, Address, Env, Map, String, Symbol, TryIntoVal, Val};
+use soroban_sdk::{token, Address, BytesN, Env, Map, String, Symbol, TryIntoVal, Val};
 
 fn setup_test() -> (Env, ShadeClient<'static>, Address, Address) {
     let env = Env::default();
@@ -12,7 +12,8 @@ fn setup_test() -> (Env, ShadeClient<'static>, Address, Address) {
     let contract_id = env.register(Shade, ());
     let client = ShadeClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
-    client.initialize(&admin);
+    let wasm_hash = BytesN::from_array(&env, &[0; 32]);
+    client.initialize(&admin, &wasm_hash);
     (env, client, contract_id, admin)
 }
 
@@ -666,7 +667,8 @@ fn setup_test_with_payment() -> (Env, ShadeClient<'static>, Address, Address, Ad
     let shade_client = ShadeClient::new(&env, &shade_contract_id);
 
     let admin = Address::generate(&env);
-    shade_client.initialize(&admin);
+    let wasm_hash = BytesN::from_array(&env, &[0; 32]);
+    shade_client.initialize(&admin, &wasm_hash);
 
     let token_admin = Address::generate(&env);
     let token = env.register_stellar_asset_contract_v2(token_admin.clone());

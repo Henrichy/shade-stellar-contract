@@ -1,4 +1,5 @@
 use crate::components::access_control;
+use crate::components::account_factory;
 use crate::components::admin as admin_component;
 use crate::components::core as core_component;
 use crate::errors::ContractError;
@@ -30,12 +31,15 @@ pub fn register_merchant(env: &Env, merchant: &Address) {
 
     let new_id = merchant_count + 1;
 
+    let account_address = account_factory::deploy_account(env, merchant.clone(), new_id);
+
     let merchant_data = Merchant {
         id: new_id,
         address: merchant.clone(),
         active: true,
         verified: false,
         date_registered: env.ledger().timestamp(),
+        account: account_address.clone(),
     };
 
     env.storage()
@@ -47,6 +51,9 @@ pub fn register_merchant(env: &Env, merchant: &Address) {
     env.storage()
         .persistent()
         .set(&DataKey::MerchantCount, &new_id);
+    env.storage()
+        .persistent()
+        .set(&DataKey::MerchantAccount(new_id), &account_address);
 
     events::publish_merchant_registered_event(
         env,

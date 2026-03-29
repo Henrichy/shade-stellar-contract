@@ -2,13 +2,14 @@
 
 use crate::shade::{Shade, ShadeClient};
 use soroban_sdk::testutils::{Address as _, MockAuth, MockAuthInvoke};
-use soroban_sdk::{Address, Env, IntoVal};
+use soroban_sdk::{Address, BytesN, Env, IntoVal};
 
 fn setup_test(env: &Env) -> (ShadeClient<'_>, Address) {
     let contract_id = env.register(Shade, ());
     let client = ShadeClient::new(env, &contract_id);
     let admin = Address::generate(env);
-    client.initialize(&admin);
+    let wasm_hash = BytesN::from_array(&env, &[0; 32]);
+    client.initialize(&admin, &wasm_hash);
     (client, admin)
 }
 

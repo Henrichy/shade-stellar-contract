@@ -4,7 +4,7 @@ use crate::shade::{Shade, ShadeClient};
 use crate::types::SubscriptionStatus;
 use account::account::{MerchantAccount, MerchantAccountClient};
 use soroban_sdk::testutils::{Address as _, Ledger as _};
-use soroban_sdk::{token, Address, Env, String};
+use soroban_sdk::{token, Address, BytesN, Env, String};
 
 /// Monthly interval constant: 30 days = 2 592 000 seconds.
 const MONTHLY_INTERVAL: u64 = 2_592_000;
@@ -28,7 +28,8 @@ fn setup_subscription_env() -> SubTestContext<'static> {
     let shade_id = env.register(Shade, ());
     let client = ShadeClient::new(&env, &shade_id);
     let admin = Address::generate(&env);
-    client.initialize(&admin);
+    let wasm_hash = BytesN::from_array(&env, &[0; 32]);
+    client.initialize(&admin, &wasm_hash);
 
     // Register token with 5% fee
     let token_admin = Address::generate(&env);

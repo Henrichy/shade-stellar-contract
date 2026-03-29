@@ -6,7 +6,7 @@ use soroban_sdk::{contracttrait, Address, BytesN, Env, String, Vec};
 
 #[contracttrait]
 pub trait ShadeTrait {
-    fn initialize(env: Env, admin: Address);
+    fn initialize(env: Env, admin: Address, account_wasm_hash: soroban_sdk::BytesN<32>);
     fn get_admin(env: Env) -> Address;
     fn add_accepted_token(env: Env, admin: Address, token: Address);
     fn add_accepted_tokens(env: Env, admin: Address, tokens: Vec<Address>);

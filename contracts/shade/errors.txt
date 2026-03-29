@@ -1,0 +1,95 @@
+   Compiling shade v0.0.0 (C:\Users\dioch\Documents\projects\drips-wave\shade-stellar-contract\contracts\shade)
+error[E0425]: cannot find value `non_admin` in this scope
+   --> contracts\shade\src\tests\test_merchant_activation.rs:142:50
+    |
+142 |     let result = client.try_set_merchant_status(&non_admin, &merchant_id, &false);
+    |                                                  ^^^^^^^^^ not found in this scope
+
+warning: unused import: `crate::errors::ContractError`
+ --> contracts\shade\src\components\account_factory.rs:1:5
+  |
+1 | use crate::errors::ContractError;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `crate::types::DataKey`
+ --> contracts\shade\src\components\account_factory.rs:3:5
+  |
+3 | use crate::types::DataKey;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `soroban_sdk::panic_with_error`
+ --> contracts\shade\src\components\account_factory.rs:4:5
+  |
+4 | use soroban_sdk::panic_with_error;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `BytesN`, `Bytes`, and `IntoVal`
+ --> contracts\shade\src\components\account_factory.rs:5:28
+  |
+5 | use soroban_sdk::{Address, Bytes, BytesN, Env, IntoVal};
+  |                            ^^^^^  ^^^^^^       ^^^^^^^
+
+error[E0061]: this method takes 2 arguments but 1 argument was supplied
+  --> contracts\shade\src\tests\test_account_factory.rs:18:12
+   |
+18 |     client.initialize(&admin);
+   |            ^^^^^^^^^^-------- argument #2 of type `&soroban_sdk::BytesN<32>` is missing
+   |
+note: method defined here
+  --> contracts\shade\src\shade.rs:20:8
+   |
+20 |     fn initialize(env: Env, admin: Address, account_wasm_hash: BytesN<32>) {
+   |        ^^^^^^^^^^                           -----------------------------
+help: provide the argument
+   |
+18 |     client.initialize(&admin, /* &soroban_sdk::BytesN<32> */);
+   |                             ++++++++++++++++++++++++++++++++
+
+error[E0061]: this method takes 2 arguments but 1 argument was supplied
+  --> contracts\shade\src\tests\test_payment.rs:18:18
+   |
+18 |     shade_client.initialize(&admin);
+   |                  ^^^^^^^^^^-------- argument #2 of type `&soroban_sdk::BytesN<32>` is missing
+   |
+note: method defined here
+  --> contracts\shade\src\shade.rs:20:8
+   |
+20 |     fn initialize(env: Env, admin: Address, account_wasm_hash: BytesN<32>) {
+   |        ^^^^^^^^^^                           -----------------------------
+help: provide the argument
+   |
+18 |     shade_client.initialize(&admin, /* &soroban_sdk::BytesN<32> */);
+   |                                   ++++++++++++++++++++++++++++++++
+
+warning: unused variable: `admin`
+   --> contracts\shade\src\tests\test_invoice.rs:160:38
+    |
+160 |     let (_env, client, _contract_id, admin) = setup_test();
+    |                                      ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `admin`
+   --> contracts\shade\src\tests\test_invoice.rs:447:37
+    |
+447 |     let (env, client, _contract_id, admin) = setup_test();
+    |                                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> contracts\shade\src\tests\test_invoice.rs:653:37
+    |
+653 |     let (env, client, _contract_id, admin) = setup_test();
+    |                                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+warning: unused variable: `admin`
+   --> contracts\shade\src\tests\test_invoice_void.rs:217:37
+    |
+217 |     let (env, client, _contract_id, admin) = setup_test();
+    |                                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_admin`
+
+Some errors have detailed explanations: E0061, E0425.
+For more information about an error, try `rustc --explain E0061`.
+warning: `shade` (lib test) generated 8 warnings
+error: could not compile `shade` (lib test) due to 3 previous errors; 8 warnings emitted
