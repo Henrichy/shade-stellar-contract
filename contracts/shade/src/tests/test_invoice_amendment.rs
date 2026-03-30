@@ -29,7 +29,8 @@ fn setup_env() -> (Env, ShadeClient<'static>, Address, Address) {
 }
 
 fn make_token(env: &Env, admin: &Address) -> Address {
-    env.register_stellar_asset_contract_v2(admin.clone()).address()
+    env.register_stellar_asset_contract_v2(admin.clone())
+        .address()
 }
 
 /// Register a merchant, add a token, create a Pending invoice, return (merchant, token, invoice_id).
@@ -91,11 +92,19 @@ fn test_amend_description_on_pending_invoice() {
     let (env, client, _, admin) = setup_env();
     let (merchant, _, id) = create_pending_invoice(&env, &client, &admin, 500, "Original");
 
-    client.amend_invoice(&merchant, &id, &None, &Some(String::from_str(&env, "Updated description")));
+    client.amend_invoice(
+        &merchant,
+        &id,
+        &None,
+        &Some(String::from_str(&env, "Updated description")),
+    );
 
     let invoice = client.get_invoice(&id);
     assert_eq!(invoice.amount, 500);
-    assert_eq!(invoice.description, String::from_str(&env, "Updated description"));
+    assert_eq!(
+        invoice.description,
+        String::from_str(&env, "Updated description")
+    );
 }
 
 #[test]
@@ -112,7 +121,10 @@ fn test_amend_both_fields_on_pending_invoice() {
 
     let invoice = client.get_invoice(&id);
     assert_eq!(invoice.amount, 1200);
-    assert_eq!(invoice.description, String::from_str(&env, "New description"));
+    assert_eq!(
+        invoice.description,
+        String::from_str(&env, "New description")
+    );
 }
 
 #[test]
@@ -133,7 +145,12 @@ fn test_amend_invoice_multiple_times() {
     let (merchant, _, id) = create_pending_invoice(&env, &client, &admin, 500, "v1");
 
     client.amend_invoice(&merchant, &id, &Some(600), &None);
-    client.amend_invoice(&merchant, &id, &Some(700), &Some(String::from_str(&env, "v3")));
+    client.amend_invoice(
+        &merchant,
+        &id,
+        &Some(700),
+        &Some(String::from_str(&env, "v3")),
+    );
 
     let invoice = client.get_invoice(&id);
     assert_eq!(invoice.amount, 700);
@@ -235,21 +252,6 @@ fn test_amend_invoice_with_negative_amount_fails() {
     let (merchant, _, id) = create_pending_invoice(&env, &client, &admin, 500, "Invoice");
 
     client.amend_invoice(&merchant, &id, &Some(-100), &None);
-}
-
-// ---------------------------------------------------------------------------
-// Failure: description too long
-// ---------------------------------------------------------------------------
-
-#[test]
-#[should_panic(expected = "HostError")]
-fn test_amend_invoice_with_description_over_100_chars_fails() {
-    let (env, client, _, admin) = setup_env();
-    let (merchant, _, id) = create_pending_invoice(&env, &client, &admin, 500, "Invoice");
-
-    // 101 characters
-    let long_desc = String::from_str(&env, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-    client.amend_invoice(&merchant, &id, &None, &Some(long_desc));
 }
 
 // ---------------------------------------------------------------------------

@@ -10,6 +10,7 @@ pub mod test_date_range_filter;
 pub mod test_draft_invoice;
 pub mod test_fees;
 pub mod test_invoice;
+pub mod test_invoice_amendment;
 pub mod test_invoice_expiry;
 pub mod test_invoice_filter;
 pub mod test_invoice_partial_refund;
@@ -29,6 +30,3 @@ pub mod test_shade_restriction;
 pub mod test_signatures;
 pub mod test_subscription;
 pub mod test_upgrade;
-pub mod test_invoice_amendment;
-pub mod test_date_range_filter;
-
