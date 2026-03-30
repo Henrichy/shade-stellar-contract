@@ -53,7 +53,7 @@ fn count_token_added_events(env: &Env) -> usize {
                 return false;
             }
             let name: Result<Symbol, _> = topics.get(0).unwrap().try_into_val(env);
-            name.map(|s| s == Symbol::new(env, "token_added_event"))
+            name.map(|s| s == Symbol::new(env, "TokenAddedEvent"))
                 .unwrap_or(false)
         })
         .count()
@@ -70,7 +70,7 @@ fn assert_token_added_event(env: &Env, contract_id: &Address, expected_token: &A
             return false;
         }
         let name: Result<Symbol, _> = topics.get(0).unwrap().try_into_val(env);
-        name.map(|s| s == Symbol::new(env, "token_added_event"))
+        name.map(|s| s == Symbol::new(env, "TokenAddedEvent"))
             .unwrap_or(false)
     });
 
@@ -117,8 +117,7 @@ fn test_batch_add_single_token() {
 
     client.add_accepted_tokens(&admin, &tokens);
 
-    assert!(client.is_accepted_token(&token));
-    assert_eq!(count_token_added_events(&env), 1);
+    panic!("Events: {:?}", env.events().all());
 }
 
 #[test]
@@ -272,7 +271,7 @@ fn test_batch_add_same_list_twice_is_idempotent() {
     client.add_accepted_tokens(&admin, &tokens);
     let events_after_first = count_token_added_events(&env);
 
-    // Second call with same tokens — no new events
+    // Second call with same tokens - no new events
     client.add_accepted_tokens(&admin, &tokens);
     assert_eq!(count_token_added_events(&env), events_after_first);
 
