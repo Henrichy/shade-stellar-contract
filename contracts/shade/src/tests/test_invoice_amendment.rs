@@ -1,4 +1,4 @@
-#![cfg(test)]
+﻿#![cfg(test)]
 
 //! Comprehensive tests for the `amend_invoice` function.
 //!
