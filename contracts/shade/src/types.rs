@@ -108,6 +108,13 @@ pub enum Role {
     Operator,
 }
 
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VolumeDiscount {
+    pub min_volume: i128,
+    pub discount_bps: i128,
+}
+
 // ── Time-locked fee update ────────────────────────────────────────────────────
 
 #[contracttype]
@@ -117,7 +124,6 @@ pub struct PendingFee {
     pub fee: i128,
     pub proposed_at: u64,
 }
-
 // ── Subscription engine ───────────────────────────────────────────────────────
 
 #[contracttype]

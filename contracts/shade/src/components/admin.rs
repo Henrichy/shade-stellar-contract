@@ -158,6 +158,18 @@ pub fn increment_merchant_volume(env: &Env, merchant: &Address, token: &Address,
     );
 }
 
+fn discount_bps_for_volume(volume: i128) -> i128 {
+    if volume >= 100_000 {
+        50
+    } else if volume >= 50_000 {
+        25
+    } else if volume >= 10_000 {
+        10
+    } else {
+        0
+    }
+}
+
 fn apply_volume_discount(fee_bps: i128, volume: i128) -> i128 {
     let discount_percentage = if volume >= 200_000 {
         50 // 50% discount

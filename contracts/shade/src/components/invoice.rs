@@ -535,10 +535,10 @@ pub fn pay_invoice_partial(env: &Env, payer: &Address, invoice_id: u64, amount: 
 
     let merchant_address: Address = merchant_id_to_address(env, invoice.merchant_id);
     let fee_amount = admin::calculate_fee(env, &merchant_address, &invoice.token, amount);
+    let merchant_account_id = merchant::get_merchant_account(env, invoice.merchant_id);
     let merchant_amount = amount - fee_amount;
 
     let token_client = token::TokenClient::new(env, &invoice.token);
-    let merchant_account_id = merchant::get_merchant_account(env, invoice.merchant_id);
 
     token_client.transfer(payer, &merchant_account_id, &merchant_amount);
     if fee_amount > 0 {
