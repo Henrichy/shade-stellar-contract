@@ -131,12 +131,54 @@ pub fn get_fee(env: &Env, token: &Address) -> i128 {
         .unwrap_or(0)
 }
 
-pub fn calculate_fee(env: &Env, token: &Address, amount: i128) -> i128 {
-    let fee_bps: i128 = get_fee(env, token);
-    if fee_bps == 0 {
+pub fn calculate_fee(env: &Env, merchant: &Address, token: &Address, amount: i128) -> i128 {
+    let base_fee = get_fee(env, token);
+    if base_fee == 0 {
         return 0;
     }
-    (amount * fee_bps) / 10_000i128
+
+    let volume = get_merchant_volume(env, merchant);
+    let discount_bps = discount_bps_for_volume(volume);
+
+    if discount_bps > 0 {
+        events::publish_fee_discount_applied_event(
+            env,
+            merchant.clone(),
+            volume,
+            discount_bps,
+            env.ledger().timestamp(),
+        );
+    }
+
+    let fee = amount * base_fee / 10_000;
+    fee - (fee * discount_bps / 10_000)
+}
+
+pub fn get_merchant_volume(env: &Env, merchant: &Address) -> i128 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::MerchantVolume(merchant.clone()))
+        .unwrap_or(0)
+}
+
+pub fn add_merchant_volume(env: &Env, merchant: &Address, amount: i128) {
+    let current = get_merchant_volume(env, merchant);
+    env.storage().persistent().set(
+        &DataKey::MerchantVolume(merchant.clone()),
+        &(current + amount),
+    );
+}
+
+fn discount_bps_for_volume(volume: i128) -> i128 {
+    if volume >= 100_000 {
+        50
+    } else if volume >= 50_000 {
+        25
+    } else if volume >= 10_000 {
+        10
+    } else {
+        0
+    }
 }
 
 pub fn propose_fee(env: &Env, admin: &Address, token: &Address, fee: i128) {
