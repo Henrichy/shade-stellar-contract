@@ -27,3 +27,5 @@ pub mod test_shade_restriction;
 pub mod test_signatures;
 pub mod test_subscription;
 pub mod test_upgrade;
+pub mod test_date_range_filter;
+
