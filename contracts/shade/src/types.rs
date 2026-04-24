@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, BytesN};
+use soroban_sdk::{contracttype, Address, BytesN, String};
 
 #[contracttype]
 pub enum DataKey {
@@ -50,6 +50,7 @@ pub struct Merchant {
     pub verified: bool,
     pub date_registered: u64,
     pub account: Address,
+    pub webhook: String,
 }
 
 #[contracttype]

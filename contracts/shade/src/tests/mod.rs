@@ -1,4 +1,4 @@
-﻿pub mod test;
+pub mod test;
 pub mod test_accepted_tokens;
 pub mod test_access_control;
 pub mod test_account_factory;
@@ -23,6 +23,7 @@ pub mod test_merchant_activation;
 pub mod test_merchant_key;
 pub mod test_merchant_tokens;
 mod test_merchant_verification;
+pub mod test_merchant_webhook;
 pub mod test_pausable;
 pub mod test_payment;
 pub mod test_querying;
