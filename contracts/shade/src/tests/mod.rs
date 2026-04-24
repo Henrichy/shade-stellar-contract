@@ -25,6 +25,7 @@ pub mod test_merchant_tokens;
 mod test_merchant_verification;
 pub mod test_pausable;
 pub mod test_payment;
+pub mod test_payment_payload;
 pub mod test_querying;
 pub mod test_reentrancy;
 pub mod test_refund;

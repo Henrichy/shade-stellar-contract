@@ -1,14 +1,15 @@
 use crate::components::{
     access_control as access_control_component, admin as admin_component, core as core_component,
     invoice as invoice_component, merchant as merchant_component, pausable as pausable_component,
-    subscription as subscription_component, upgrade as upgrade_component,
+    payment as payment_component, subscription as subscription_component,
+    upgrade as upgrade_component,
 };
 use crate::errors::ContractError;
 use crate::events;
 use crate::interface::ShadeTrait;
 use crate::types::{
-    ContractInfo, DataKey, Invoice, InvoiceFilter, Merchant, MerchantFilter, PendingFee, Role,
-    Subscription, SubscriptionPlan,
+    ContractInfo, DataKey, Invoice, InvoiceFilter, Merchant, MerchantFilter, PaymentPayload,
+    PendingFee, Role, Subscription, SubscriptionPlan,
 };
 use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env, String, Vec};
 
@@ -267,6 +268,10 @@ impl ShadeTrait for Shade {
     fn pay_invoice_partial(env: Env, payer: Address, invoice_id: u64, amount: i128) {
         pausable_component::assert_not_paused(&env);
         invoice_component::pay_invoice_partial(&env, &payer, invoice_id, amount);
+    }
+
+    fn validate_payment_payload(env: Env, payload: PaymentPayload) {
+        payment_component::validate_payment_payload(&env, &payload);
     }
 
     fn void_invoice(env: Env, merchant: Address, invoice_id: u64) {

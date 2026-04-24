@@ -40,4 +40,6 @@ pub enum ContractError {
     TokenNotAcceptedByMerchant = 41,
     FeeUpdateTooEarly = 42,
     NoPendingFeeUpdate = 43,
+    InvalidSwapPath = 44,
+    InvalidSlippage = 45,
 }

@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, BytesN};
+use soroban_sdk::{contracttype, Address, BytesN, Vec};
 
 #[contracttype]
 pub enum DataKey {
@@ -115,7 +115,30 @@ pub struct VolumeDiscount {
     pub discount_bps: i128,
 }
 
-// ── Time-locked fee update ────────────────────────────────────────────────────
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SwapRoute {
+    pub router: Address,
+    pub path: Vec<Address>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PaymentRoute {
+    Direct,
+    Swap(SwapRoute),
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PaymentPayload {
+    pub input_token: Address,
+    pub settlement_token: Address,
+    pub route: PaymentRoute,
+    pub max_slippage_bps: Option<u32>,
+}
+
+// --- Time-locked fee update ---
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -124,15 +147,16 @@ pub struct PendingFee {
     pub fee: i128,
     pub proposed_at: u64,
 }
-// ── Subscription engine ───────────────────────────────────────────────────────
+
+// --- Subscription engine ---
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SubscriptionPlan {
     pub id: u64,
-    /// Numeric merchant ID — used to look up the merchant's account contract.
+    /// Numeric merchant ID - used to look up the merchant's account contract.
     pub merchant_id: u64,
-    /// The merchant's wallet address — needed for event emission and auth checks.
+    /// The merchant's wallet address - needed for event emission and auth checks.
     pub merchant: Address,
     /// Human-readable description of the plan.
     pub description: soroban_sdk::String,
