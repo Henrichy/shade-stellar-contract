@@ -592,11 +592,17 @@ pub fn publish_nonce_invalidated_event(
     .publish(env);
 }
 
-#[contractevent]
+#[derive(Clone)]
 pub struct CrossChainBridgePlaceholderEvent {
     pub caller: Address,
     pub payload: crate::types::CrossChainBridgePayload,
     pub timestamp: u64,
+}
+
+impl CrossChainBridgePlaceholderEvent {
+    pub fn publish(self, env: &Env) {
+        env.events().publish(("cross_chain_bridge", "placeholder"), (&self.caller, &self.timestamp));
+    }
 }
 
 pub fn publish_cross_chain_bridge_placeholder_event(
@@ -849,6 +855,95 @@ pub fn publish_admin_transfer_accepted_event(
         old_admin,
         new_admin,
         timestamp,
+    }
+    .publish(env);
+}
+
+#[derive(Clone)]
+pub struct AutoWithdrawalThresholdSetEvent {
+    pub merchant_id: u64,
+    pub token: Address,
+    pub threshold: i128,
+    pub timestamp: u64,
+}
+
+impl AutoWithdrawalThresholdSetEvent {
+    pub fn publish(self, env: &Env) {
+        env.events().publish(("auto_withdrawal", "threshold_set"), (&self.merchant_id, &self.token, &self.threshold, &self.timestamp));
+    }
+}
+
+pub fn publish_auto_withdrawal_threshold_set_event(
+    env: &Env,
+    merchant_id: u64,
+    token: Address,
+    threshold: i128,
+) {
+    AutoWithdrawalThresholdSetEvent {
+        merchant_id,
+        token,
+        threshold,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+#[derive(Clone)]
+pub struct AutoWithdrawalRecipientSetEvent {
+    pub merchant_id: u64,
+    pub recipient: Address,
+    pub timestamp: u64,
+}
+
+impl AutoWithdrawalRecipientSetEvent {
+    pub fn publish(self, env: &Env) {
+        env.events()
+            .publish(("auto_withdrawal", "recipient_set"), (&self.merchant_id, &self.recipient, &self.timestamp));
+    }
+}
+
+pub fn publish_auto_withdrawal_recipient_set_event(
+    env: &Env,
+    merchant_id: u64,
+    recipient: Address,
+) {
+    AutoWithdrawalRecipientSetEvent {
+        merchant_id,
+        recipient,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+#[derive(Clone)]
+pub struct AutoWithdrawalTriggeredEvent {
+    pub merchant_id: u64,
+    pub token: Address,
+    pub amount: i128,
+    pub recipient: Address,
+    pub timestamp: u64,
+}
+
+impl AutoWithdrawalTriggeredEvent {
+    pub fn publish(self, env: &Env) {
+        env.events()
+            .publish(("auto_withdrawal", "triggered"), (&self.merchant_id, &self.token, &self.amount, &self.recipient, &self.timestamp));
+    }
+}
+
+pub fn publish_auto_withdrawal_triggered_event(
+    env: &Env,
+    merchant_id: u64,
+    token: Address,
+    amount: i128,
+    recipient: Address,
+) {
+    AutoWithdrawalTriggeredEvent {
+        merchant_id,
+        token,
+        amount,
+        recipient,
+        timestamp: env.ledger().timestamp(),
     }
     .publish(env);
 }
