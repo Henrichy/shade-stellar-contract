@@ -158,4 +158,25 @@ pub trait ShadeTrait {
         caller: Address,
         payload: CrossChainBridgePayload,
     );
+
+    // ── Auto-withdrawal thresholds ───────────────────────────────────────────
+
+    /// Set auto-withdrawal threshold for a merchant and token.
+    /// Only the merchant can call this (requires auth).
+    fn set_auto_withdrawal_threshold(
+        env: Env,
+        merchant: Address,
+        token: Address,
+        threshold: i128,
+    );
+
+    /// Get auto-withdrawal threshold for a merchant and token.
+    fn get_auto_withdrawal_threshold(env: Env, merchant_id: u64, token: Address) -> Option<i128>;
+
+    /// Set auto-withdrawal recipient address for a merchant.
+    /// Only the merchant can call this (requires auth).
+    fn set_auto_withdrawal_recipient(env: Env, merchant: Address, recipient: Address);
+
+    /// Get auto-withdrawal recipient for a merchant.
+    fn get_auto_withdrawal_recipient(env: Env, merchant_id: u64) -> Option<Address>;
 }
