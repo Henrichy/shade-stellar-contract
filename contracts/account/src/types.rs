@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address};
+use soroban_sdk::{ contracttype, Address, Vec };
 
 #[contracttype]
 pub enum DataKey {
@@ -8,6 +8,10 @@ pub enum DataKey {
     Restricted,
     AccountInfo,
     TrackedTokens,
+    WithdrawalThreshold,
+    CoSigners,
+    PendingWithdrawalCounter,
+    PendingWithdrawals(u64),
 }
 
 #[contracttype]
@@ -24,4 +28,16 @@ pub struct AccountInfo {
 pub struct TokenBalance {
     pub token: Address,
     pub balance: i128,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PendingWithdrawal {
+    pub id: u64,
+    pub token: Address,
+    pub amount: i128,
+    pub recipient: Address,
+    pub initiator: Address,
+    pub approvals: Vec<Address>,
+    pub timestamp: u64,
 }

@@ -9,4 +9,8 @@ pub enum ContractError {
     NotAuthorized = 3,
     InsufficientBalance = 4,
     AccountRestricted = 5,
+    PendingWithdrawalNotFound = 6,
+    AlreadyApproved = 7,
+    ThresholdNotMet = 8,
+    InvalidCoSigner = 9,
 }
