@@ -729,3 +729,32 @@ pub fn publish_admin_transfer_accepted_event(
     }
     .publish(env);
 }
+
+// ── Escrow expiry refund event ────────────────────────────────────────────────
+
+#[contractevent]
+pub struct EscrowExpiredRefundEvent {
+    pub invoice_id: u64,
+    pub buyer: Address,
+    pub amount: i128,
+    pub token: Address,
+    pub timestamp: u64,
+}
+
+pub fn publish_escrow_expired_refund_event(
+    env: &Env,
+    invoice_id: u64,
+    buyer: Address,
+    amount: i128,
+    token: Address,
+    timestamp: u64,
+) {
+    EscrowExpiredRefundEvent {
+        invoice_id,
+        buyer,
+        amount,
+        token,
+        timestamp,
+    }
+    .publish(env);
+}

@@ -667,6 +667,68 @@ pub fn amend_invoice(
     );
 }
 
+pub fn claim_refund(env: &Env, buyer: &Address, invoice_id: u64) {
+    buyer.require_auth();
+
+    let mut invoice = get_invoice(env, invoice_id);
+
+    // Only the original payer (buyer) may claim
+    match &invoice.payer {
+        Some(payer) if payer == buyer => {}
+        _ => panic_with_error!(env, ContractError::NotAuthorized),
+    }
+
+    // Invoice must have an expiration timestamp set
+    let expires_at = match invoice.expires_at {
+        Some(ts) => ts,
+        None => panic_with_error!(env, ContractError::InvoiceExpired),
+    };
+
+    // Expiration must have passed
+    if env.ledger().timestamp() < expires_at {
+        panic_with_error!(env, ContractError::EscrowNotExpired);
+    }
+
+    // Invoice must be in a paid (but unfulfilled) state — Paid or PartiallyPaid
+    if invoice.status != InvoiceStatus::Paid && invoice.status != InvoiceStatus::PartiallyPaid {
+        panic_with_error!(env, ContractError::InvalidInvoiceStatus);
+    }
+
+    // Must not have already been fully refunded
+    let amount_to_refund = invoice.amount_paid - invoice.amount_refunded;
+    if amount_to_refund <= 0 {
+        panic_with_error!(env, ContractError::EscrowAlreadyRefunded);
+    }
+
+    // Check merchant account has sufficient balance
+    let merchant_account = merchant::get_merchant_account(env, invoice.merchant_id);
+    let token_client = TokenClient::new(env, &invoice.token);
+    let merchant_balance = token_client.balance(&merchant_account);
+    if merchant_balance < amount_to_refund {
+        panic_with_error!(env, ContractError::InsufficientBalance);
+    }
+
+    // Execute refund from merchant account back to buyer
+    let refund_client = MerchantAccountRefundClient::new(env, &merchant_account);
+    refund_client.refund(&invoice.token, &amount_to_refund, buyer);
+
+    // Update invoice state
+    invoice.amount_refunded += amount_to_refund;
+    invoice.status = InvoiceStatus::Refunded;
+    env.storage()
+        .persistent()
+        .set(&DataKey::Invoice(invoice_id), &invoice);
+
+    events::publish_escrow_expired_refund_event(
+        env,
+        invoice_id,
+        buyer.clone(),
+        amount_to_refund,
+        invoice.token.clone(),
+        env.ledger().timestamp(),
+    );
+}
+
 fn merchant_id_to_address(env: &Env, merchant_id: u64) -> Address {
     let merchant_data: crate::types::Merchant = env
         .storage()

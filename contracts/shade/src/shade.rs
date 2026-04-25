@@ -337,6 +337,11 @@ impl ShadeTrait for Shade {
         subscription_component::cancel_subscription(&env, caller, subscription_id);
     }
 
+    fn claim_refund(env: Env, buyer: Address, invoice_id: u64) {
+        pausable_component::assert_not_paused(&env);
+        invoice_component::claim_refund(&env, &buyer, invoice_id);
+    }
+
     fn set_merchant_accepted_tokens(env: Env, merchant: Address, tokens: Vec<Address>) {
         pausable_component::assert_not_paused(&env);
         merchant_component::set_merchant_accepted_tokens(&env, &merchant, &tokens);

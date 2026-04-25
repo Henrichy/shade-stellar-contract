@@ -134,4 +134,10 @@ pub trait ShadeTrait {
 
     /// Cancel a subscription. Either the customer or the merchant may call this.
     fn cancel_subscription(env: Env, caller: Address, subscription_id: u64);
+
+    /// Claim a refund for an expired escrow (invoice that was paid but delivery
+    /// timeframe expired without fulfillment). Only the original buyer/payer may
+    /// call this. The invoice must have an `expires_at` timestamp that has
+    /// already passed and must not have been refunded yet.
+    fn claim_refund(env: Env, buyer: Address, invoice_id: u64);
 }
