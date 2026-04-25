@@ -571,8 +571,14 @@ pub fn get_invoices(env: &Env, filter: InvoiceFilter) -> Vec<Invoice> {
 }
 //no new changes to add
 
-pub fn refund_invoice_partial(env: &Env, invoice_id: u64, amount: i128) {
+pub fn refund_invoice_partial(env: &Env, merchant_address: &Address, invoice_id: u64, amount: i128) {
+    merchant_address.require_auth();
     let mut invoice = get_invoice(env, invoice_id);
+
+    let merchant_id = merchant::get_merchant_id(env, merchant_address);
+    if invoice.merchant_id != merchant_id {
+        panic_with_error!(env, ContractError::NotAuthorized);
+    }
 
     if invoice.status != InvoiceStatus::Paid && invoice.status != InvoiceStatus::PartiallyRefunded {
         panic_with_error!(env, ContractError::InvalidInvoiceStatus);
@@ -628,7 +634,7 @@ pub fn refund_invoice_partial(env: &Env, invoice_id: u64, amount: i128) {
         events::publish_invoice_refunded_event(
             env,
             invoice_id,
-            payer,
+            merchant_address.clone(),
             invoice.amount,
             env.ledger().timestamp(),
         );
@@ -636,7 +642,7 @@ pub fn refund_invoice_partial(env: &Env, invoice_id: u64, amount: i128) {
         events::publish_invoice_partially_refunded_event(
             env,
             invoice_id,
-            payer,
+            merchant_address.clone(),
             amount,
             total_refund,
             env.ledger().timestamp(),
