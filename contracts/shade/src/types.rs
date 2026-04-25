@@ -36,6 +36,9 @@ pub enum DataKey {
     MerchantAnalyticsSummary(Address),
     PlatformAccount,
     TokenOracle(Address),
+    // --- Auto-withdrawal thresholds ---
+    MerchantAutoWithdrawalThreshold(u64, Address),
+    MerchantAutoWithdrawalRecipient(u64),
 }
 
 #[contracttype]
@@ -232,4 +235,12 @@ pub struct Subscription {
 pub enum SubscriptionStatus {
     Active = 0,
     Cancelled = 1,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AutoWithdrawalThreshold {
+    pub merchant_id: u64,
+    pub token: Address,
+    pub threshold: i128,
 }
