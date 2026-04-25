@@ -426,4 +426,31 @@ impl ShadeTrait for Shade {
             env.ledger().timestamp(),
         );
     }
+
+    fn set_auto_withdrawal_threshold(
+        env: Env,
+        merchant: Address,
+        token: Address,
+        threshold: i128,
+    ) {
+        pausable_component::assert_not_paused(&env);
+        use crate::components::auto_withdrawal as auto_withdrawal_component;
+        auto_withdrawal_component::set_auto_withdrawal_threshold(&env, &merchant, &token, threshold);
+    }
+
+    fn get_auto_withdrawal_threshold(env: Env, merchant_id: u64, token: Address) -> Option<i128> {
+        use crate::components::auto_withdrawal as auto_withdrawal_component;
+        auto_withdrawal_component::get_auto_withdrawal_threshold(&env, merchant_id, &token)
+    }
+
+    fn set_auto_withdrawal_recipient(env: Env, merchant: Address, recipient: Address) {
+        pausable_component::assert_not_paused(&env);
+        use crate::components::auto_withdrawal as auto_withdrawal_component;
+        auto_withdrawal_component::set_auto_withdrawal_recipient(&env, &merchant, &recipient);
+    }
+
+    fn get_auto_withdrawal_recipient(env: Env, merchant_id: u64) -> Option<Address> {
+        use crate::components::auto_withdrawal as auto_withdrawal_component;
+        auto_withdrawal_component::get_auto_withdrawal_recipient(&env, merchant_id)
+    }
 }
