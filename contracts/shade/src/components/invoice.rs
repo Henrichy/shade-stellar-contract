@@ -740,12 +740,20 @@ pub fn pay_invoice_partial(env: &Env, payer: &Address, invoice_id: u64, amount: 
     events::publish_payment_split_routed_event(
         env,
         invoice_id,
-        merchant_account_id,
+        merchant_account_id.clone(),
         platform_account,
         merchant_amount,
         fee_amount,
         invoice.token.clone(),
         env.ledger().timestamp(),
+    );
+
+    // Check and trigger auto-withdrawal if threshold is exceeded
+    use crate::components::auto_withdrawal as auto_withdrawal_component;
+    let _ = auto_withdrawal_component::check_and_trigger_auto_withdrawal(
+        env,
+        invoice.merchant_id,
+        &invoice.token,
     );
 
     fee_amount
