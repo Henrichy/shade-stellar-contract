@@ -6,37 +6,39 @@ use crate::types::Role;
 use soroban_sdk::testutils::{Address as _, Events as _};
 use soroban_sdk::{Address, Env, Map, Symbol, TryIntoVal, Val};
 
-fn setup() -> (Env, ShadeClient<'static>, Address, Address, Address) {
+/// Setup the test environment and return clients and addresses.
+fn setup() -> (Env, ShadeClient<'static>, account::account::MerchantAccountClient<'static>, Address, Address, Address) {
     let env = Env::default();
-    env.mock_all_auths();
-
+    
     let contract_id = env.register(Shade, ());
     let client = ShadeClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
-    client.initialize(&admin);
-
-    let merchant = Address::generate(&env);
     let manager = Address::generate(&env);
+    let merchant = Address::generate(&env);
 
-    // Grant Manager role
+    // Initial authorization to set up the state
+    env.mock_all_auths();
+    
+    client.initialize(&admin);
     client.grant_role(&admin, &manager, &Role::Manager);
 
-    // Register Merchant
+    // Register Merchant in Shade
     client.register_merchant(&merchant);
 
-    // Deploy MerchantAccount mock (using real contract)
+    // Deploy MerchantAccount (via manual registration flow simulation)
     let acct_id = env.register(account::account::MerchantAccount, ());
     let acct_client = account::account::MerchantAccountClient::new(&env, &acct_id);
-    let merchant_id_val = 1_u64; // Since this is the first and only merchant
+    let merchant_id_val = 1_u64; 
     acct_client.initialize(&merchant, &contract_id, &merchant_id_val);
 
-    // Link Merchant Account in Shade -> simulate factory linking
+    // Link Merchant Account in Shade
     client.set_merchant_account(&merchant, &acct_id);
 
-    (env, client, admin, manager, merchant)
+    (env, client, acct_client, admin, manager, merchant)
 }
 
+/// Helper to assert the latest account restricted event.
 fn assert_latest_account_restricted_event(
     env: &Env,
     contract_id: &Address,
@@ -76,54 +78,51 @@ fn assert_latest_account_restricted_event(
 
 #[test]
 fn test_admin_restrict_merchant_account_success() {
-    let (env, client, admin, _manager, merchant) = setup();
+    let (env, client, acct_client, admin, _manager, merchant) = setup();
 
     // Verify initial state
-    let merchant_id = 1_u64;
-    let account_address = client.get_merchant_account(&merchant_id);
-    let acct_client = account::account::MerchantAccountClient::new(&env, &account_address);
-    assert!(!acct_client.is_restricted_account());
+    assert_eq!(acct_client.is_restricted_account(), false);
 
     // Admin restricts the account
+    env.mock_all_auths();
     client.restrict_merchant_account(&admin, &merchant, &true);
 
     // Verify Shade event
     assert_latest_account_restricted_event(&env, &client.address, &merchant, true, &admin);
 
     // Verify Account contract state changed
-    assert!(acct_client.is_restricted_account());
+    assert_eq!(acct_client.is_restricted_account(), true);
 
     // Admin un-restricts the account
     client.restrict_merchant_account(&admin, &merchant, &false);
     assert_latest_account_restricted_event(&env, &client.address, &merchant, false, &admin);
-    assert!(!acct_client.is_restricted_account());
+    assert_eq!(acct_client.is_restricted_account(), false);
 }
 
 #[test]
 fn test_manager_restrict_merchant_account_success() {
-    let (env, client, _admin, manager, merchant) = setup();
-
-    let merchant_id = 1_u64;
-    let account_address = client.get_merchant_account(&merchant_id);
-    let acct_client = account::account::MerchantAccountClient::new(&env, &account_address);
+    let (env, client, acct_client, _admin, manager, merchant) = setup();
 
     // Manager restricts the account
+    env.mock_all_auths();
     client.restrict_merchant_account(&manager, &merchant, &true);
 
-    // Verify Shape event
+    // Verify Shade event
     assert_latest_account_restricted_event(&env, &client.address, &merchant, true, &manager);
 
     // Verify Account contract state
-    assert!(acct_client.is_restricted_account());
+    assert_eq!(acct_client.is_restricted_account(), true);
 }
 
 #[test]
 fn test_unauthorized_restriction_attempt() {
-    let (env, client, _admin, _manager, merchant) = setup();
+    let (env, client, acct_client, _admin, _manager, merchant) = setup();
 
     let random_user = Address::generate(&env);
 
     // Attempt from random user
+    // We don't use mock_all_auths here to ensure we hit the role-check logic correctly
+    // However, try_ methods will still report the contract error if role check fails
     let res = client.try_restrict_merchant_account(&random_user, &merchant, &true);
     assert_eq!(
         res,
@@ -142,17 +141,15 @@ fn test_unauthorized_restriction_attempt() {
     );
 
     // Verify state did not change
-    let merchant_id = 1_u64;
-    let account_address = client.get_merchant_account(&merchant_id);
-    let acct_client = account::account::MerchantAccountClient::new(&env, &account_address);
-    assert!(!acct_client.is_restricted_account());
+    assert_eq!(acct_client.is_restricted_account(), false);
 }
 
 #[test]
 fn test_invalid_merchant_restriction() {
-    let (env, client, admin, _manager, _merchant) = setup();
+    let (env, client, _acct_client, admin, _manager, _merchant) = setup();
     let invalid_merchant = Address::generate(&env);
 
+    env.mock_all_auths();
     let res = client.try_restrict_merchant_account(&admin, &invalid_merchant, &true);
     assert_eq!(
         res,
