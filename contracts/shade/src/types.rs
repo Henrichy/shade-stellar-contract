@@ -37,6 +37,9 @@ pub enum DataKey {
     MerchantAnalyticsSummary(Address),
     PlatformAccount,
     TokenOracle(Address),
+    // --- Global token analytics ---
+    TokenAnalytics(Address),
+    TokenVolume(Address),
 }
 
 #[contracttype]
@@ -239,6 +242,18 @@ pub enum SubscriptionStatus {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TokenAnalytics {
+    pub token: Address,
+    pub total_volume: i128,
+    pub total_fees: i128,
+    pub transaction_count: u64,
+    pub unique_merchants: u64,
+    pub last_updated: u64,
+}
+
+#[contracttype]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[repr(u32)]
 pub enum TransactionType {
     InvoicePayment = 0,
     SubscriptionCharge = 1,

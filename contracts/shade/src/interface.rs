@@ -1,6 +1,7 @@
 use crate::types::{
     CrossChainBridgePayload, Invoice, InvoiceFilter, Merchant, MerchantAnalytics,
     MerchantAnalyticsSummary, MerchantFilter, OracleConfig, PendingFee, Role, Subscription,
+    SubscriptionPlan, TokenAnalytics,
     SubscriptionPlan,Transaction
 };
 use soroban_sdk::{contracttrait, Address, BytesN, Env, String, Vec};
@@ -166,4 +167,21 @@ pub trait ShadeTrait {
         caller: Address,
         payload: CrossChainBridgePayload,
     );
+
+    // ── Token analytics ────────────────────────────────────────────────────────
+
+    /// Get comprehensive analytics for a specific token
+    fn get_token_analytics(env: Env, token: Address) -> TokenAnalytics;
+
+    /// Get total volume for a specific token
+    fn get_token_volume(env: Env, token: Address) -> i128;
+
+    /// Get token dominance metrics sorted by volume (descending)
+    fn get_token_dominance_metrics(env: Env, tokens: Vec<Address>) -> Vec<(Address, i128)>;
+
+    /// Get top tokens by volume with limit
+    fn get_top_tokens_by_volume(env: Env, limit: u32) -> Vec<(Address, i128)>;
+
+    /// Get market share of a token as basis points (10000 = 100%)
+    fn get_token_market_share(env: Env, token: Address) -> i128;
 }
