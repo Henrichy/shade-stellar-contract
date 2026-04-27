@@ -1,8 +1,22 @@
 #![no_std]
-use soroban_sdk::{contract, contractevent, contractimpl, contracttype, token, Address, Env, String};
+use soroban_sdk::{
+    contract, contractevent, contractimpl, contracttype, token, Address, Env, String,
+};
 
 #[contract]
 pub struct EscrowContract;
+
+#[derive(Clone)]
+#[contracttype]
+pub struct EscrowConfig {
+    pub buyer: Address,
+    pub seller: Address,
+    pub arbiter: Address,
+    pub terms: String,
+    pub token: Address,
+    pub amount: i128,
+    pub expiry: u64,
+}
 
 #[derive(Clone)]
 #[contracttype]
@@ -14,6 +28,7 @@ enum DataKey {
     Token,
     Amount,
     Status,
+    Expiry,
 }
 
 #[contracttype]
@@ -58,37 +73,37 @@ pub struct EscrowDisputeResolvedEvent {
     pub released_to_buyer: bool,
 }
 
+#[contractevent]
+pub struct EscrowRefundClaimedEvent {
+    pub buyer: Address,
+    pub token: Address,
+    pub amount: i128,
+}
+
 #[contractimpl]
 impl EscrowContract {
-    pub fn init(
-        env: Env,
-        buyer: Address,
-        seller: Address,
-        arbiter: Address,
-        terms: String,
-        token: Address,
-        amount: i128,
-    ) {
+    pub fn init(env: Env, config: EscrowConfig) {
         if env.storage().instance().has(&DataKey::Buyer) {
             panic!("escrow already initialized");
         }
 
-        env.storage().instance().set(&DataKey::Buyer, &buyer);
-        env.storage().instance().set(&DataKey::Seller, &seller);
-        env.storage().instance().set(&DataKey::Arbiter, &arbiter);
-        env.storage().instance().set(&DataKey::Terms, &terms);
-        env.storage().instance().set(&DataKey::Token, &token);
-        env.storage().instance().set(&DataKey::Amount, &amount);
+        env.storage().instance().set(&DataKey::Buyer, &config.buyer);
+        env.storage().instance().set(&DataKey::Seller, &config.seller);
+        env.storage().instance().set(&DataKey::Arbiter, &config.arbiter);
+        env.storage().instance().set(&DataKey::Terms, &config.terms);
+        env.storage().instance().set(&DataKey::Token, &config.token);
+        env.storage().instance().set(&DataKey::Amount, &config.amount);
+        env.storage().instance().set(&DataKey::Expiry, &config.expiry);
         env.storage()
             .instance()
             .set(&DataKey::Status, &EscrowStatus::Pending);
 
         EscrowInitializedEvent {
-            buyer,
-            seller,
-            arbiter,
-            token,
-            amount,
+            buyer: config.buyer,
+            seller: config.seller,
+            arbiter: config.arbiter,
+            token: config.token,
+            amount: config.amount,
         }
         .publish(&env);
     }
@@ -121,6 +136,44 @@ impl EscrowContract {
         env.storage().instance().get(&DataKey::Status).unwrap()
     }
 
+    pub fn expiry(env: Env) -> u64 {
+        env.storage().instance().get(&DataKey::Expiry).unwrap()
+    }
+
+    pub fn claim_refund(env: Env) {
+        let buyer = Self::buyer(env.clone());
+        buyer.require_auth();
+
+        if Self::status(env.clone()) != EscrowStatus::Pending {
+            panic!("escrow is not pending");
+        }
+
+        let expiry = Self::expiry(env.clone());
+        if env.ledger().timestamp() <= expiry {
+            panic!("escrow has not expired yet");
+        }
+
+        let token = Self::token(env.clone());
+        let amount = Self::amount(env.clone());
+
+        token::TokenClient::new(&env, &token).transfer(
+            &env.current_contract_address(),
+            &buyer,
+            &amount,
+        );
+
+        env.storage()
+            .instance()
+            .set(&DataKey::Status, &EscrowStatus::Resolved);
+
+        EscrowRefundClaimedEvent {
+            buyer,
+            token,
+            amount,
+        }
+        .publish(&env);
+    }
+
     pub fn approve_release(env: Env) {
         let buyer = Self::buyer(env.clone());
         buyer.require_auth();
@@ -133,10 +186,15 @@ impl EscrowContract {
         let token = Self::token(env.clone());
         let amount = Self::amount(env.clone());
 
-        token::TokenClient::new(&env, &token)
-            .transfer(&env.current_contract_address(), &seller, &amount);
+        token::TokenClient::new(&env, &token).transfer(
+            &env.current_contract_address(),
+            &seller,
+            &amount,
+        );
 
-        env.storage().instance().set(&DataKey::Status, &EscrowStatus::Completed);
+        env.storage()
+            .instance()
+            .set(&DataKey::Status, &EscrowStatus::Completed);
 
         EscrowReleaseApprovedEvent {
             buyer,
@@ -157,9 +215,16 @@ impl EscrowContract {
 
         let token = Self::token(env.clone());
         let amount = Self::amount(env.clone());
-        env.storage().instance().set(&DataKey::Status, &EscrowStatus::Disputed);
+        env.storage()
+            .instance()
+            .set(&DataKey::Status, &EscrowStatus::Disputed);
 
-        EscrowDisputeOpenedEvent { buyer, token, amount }.publish(&env);
+        EscrowDisputeOpenedEvent {
+            buyer,
+            token,
+            amount,
+        }
+        .publish(&env);
     }
 
     pub fn resolve_dispute(env: Env, released_to_buyer: bool) {
@@ -176,9 +241,14 @@ impl EscrowContract {
         let amount = Self::amount(env.clone());
         let recipient = if released_to_buyer { buyer } else { seller };
 
-        token::TokenClient::new(&env, &token)
-            .transfer(&env.current_contract_address(), &recipient, &amount);
-        env.storage().instance().set(&DataKey::Status, &EscrowStatus::Resolved);
+        token::TokenClient::new(&env, &token).transfer(
+            &env.current_contract_address(),
+            &recipient,
+            &amount,
+        );
+        env.storage()
+            .instance()
+            .set(&DataKey::Status, &EscrowStatus::Resolved);
 
         EscrowDisputeResolvedEvent {
             arbiter,
