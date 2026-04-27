@@ -248,6 +248,11 @@ pub struct TokenAnalytics {
     pub transaction_count: u64,
     pub unique_merchants: u64,
     pub last_updated: u64,
+}
+
+#[contracttype]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[repr(u32)]
 pub enum TransactionType {
     InvoicePayment = 0,
     SubscriptionCharge = 1,
