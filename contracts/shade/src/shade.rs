@@ -2,16 +2,16 @@ use crate::components::{
     access_control as access_control_component, admin as admin_component, core as core_component,
     invoice as invoice_component, merchant as merchant_component, pausable as pausable_component,
     subscription as subscription_component, upgrade as upgrade_component,
-    history as history_component,
+    history as history_component, payment as payment_component,
 };
 use crate::errors::ContractError;
 use crate::events;
 use crate::interface::ShadeTrait;
 use crate::types::{
-    ContractInfo, CrossChainBridgePayload, DataKey, Invoice, InvoiceFilter, Merchant,
-    MerchantAnalytics, MerchantAnalyticsSummary, MerchantFilter, OracleConfig, PendingFee, Role,
-    Subscription, SubscriptionPlan, TokenAnalytics,
-    Subscription, SubscriptionPlan, Transaction
+    ContractInfo, CrossChainBridgePayload, DataKey, Event, Invoice, InvoiceFilter, Merchant,
+    MerchantAnalytics, MerchantAnalyticsSummary, MerchantFilter, OracleConfig, PaymentPayload,
+    PaymentRoute, PendingFee, Role, Subscription, SubscriptionPlan, SwapRoute, TokenAnalytics,
+    Transaction
 };
 use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env, String, Vec};
 
@@ -328,8 +328,8 @@ impl ShadeTrait for Shade {
         invoice_component::pay_invoice_partial(&env, &payer, invoice_id, amount);
     }
 
-    fn validate_payment_payload(env: Env, payload: PaymentPayload) {
-        payment_component::validate_payment_payload(&env, &payload);
+    fn validate_payment_payload(env: Env, payload: crate::types::PaymentPayload) {
+        crate::components::payment::validate_payment_payload(&env, &payload);
     }
 
     fn void_invoice(env: Env, merchant: Address, invoice_id: u64) {
@@ -431,19 +431,41 @@ impl ShadeTrait for Shade {
         history_component::get_user_transactions(&env, user)
     }
     
-    fn emit_cross_chain_bridge_placeholder(
+    fn emit_bridge_placeholder(
         env: Env,
         caller: Address,
         payload: CrossChainBridgePayload,
     ) {
         pausable_component::assert_not_paused(&env);
         caller.require_auth();
-        events::publish_cross_chain_bridge_placeholder_event(
+        events::publish_bridge_placeholder_event(
             &env,
             caller,
             payload,
             env.ledger().timestamp(),
         );
+    }
+
+    // --- Event system ---
+    fn create_event(
+        env: Env,
+        merchant: Address,
+        name: String,
+        ticket_price: i128,
+        token: Address,
+        capacity: u32,
+    ) -> u64 {
+        pausable_component::assert_not_paused(&env);
+        crate::components::event::create_event(&env, &merchant, &name, &ticket_price, &token, &capacity)
+    }
+
+    fn purchase_ticket(env: Env, event_id: u64, buyer: Address) {
+        pausable_component::assert_not_paused(&env);
+        crate::components::event::purchase_ticket(&env, &event_id, &buyer);
+    }
+
+    fn get_event(env: Env, event_id: u64) -> crate::types::Event {
+        crate::components::event::get_event(&env, &event_id)
     }
 
     fn get_token_analytics(env: Env, token: Address) -> TokenAnalytics {
