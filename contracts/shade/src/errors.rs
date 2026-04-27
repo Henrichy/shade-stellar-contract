@@ -37,7 +37,11 @@ pub enum ContractError {
     InsufficientAllowance = 31,
     MerchantNotActive = 32,
     InvalidDescription = 33,
+    OracleNotConfigured = 34,
+    OraclePriceUnavailable = 35,
     TokenNotAcceptedByMerchant = 41,
     FeeUpdateTooEarly = 42,
     NoPendingFeeUpdate = 43,
+    InvalidSwapPath = 44,
+    InvalidSlippage = 45,
 }
