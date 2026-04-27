@@ -316,20 +316,23 @@ fn record_token_payment(env: &Env, token: &Address, volume_amount: i128, fee_amo
 }
 
 pub fn get_token_dominance_metrics(env: &Env, tokens: &Vec<Address>) -> Vec<(Address, i128)> {
-    let mut token_volumes: Vec<(Address, i128)> = Vec::new(env);
-    let mut total_volume: i128 = 0;
+    let mut token_volumes_native: std::vec::Vec<(Address, i128)> = std::vec::Vec::new();
     
     // Calculate total volume across all tokens
     for token in tokens.iter() {
-        let volume = get_token_volume(env, token);
-        total_volume += volume;
-        token_volumes.push_back((token.clone(), volume));
+        let volume = get_token_volume(env, &token);
+        token_volumes_native.push((token, volume));
     }
     
     // Sort by volume in descending order
-    token_volumes.sort_by(|a, b| b.1.cmp(&a.1));
+    token_volumes_native.sort_by(|a, b| b.1.cmp(&a.1));
     
-    token_volumes
+    let mut result = Vec::new(env);
+    for item in token_volumes_native {
+        result.push_back(item);
+    }
+    
+    result
 }
 
 pub fn get_top_tokens_by_volume(env: &Env, limit: u32) -> Vec<(Address, i128)> {
@@ -354,7 +357,7 @@ pub fn get_token_market_share(env: &Env, token: &Address) -> i128 {
     let mut total_volume: i128 = 0;
     
     for t in accepted_tokens.iter() {
-        total_volume += get_token_volume(env, t);
+        total_volume += get_token_volume(env, &t);
     }
     
     if total_volume == 0 {

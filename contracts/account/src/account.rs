@@ -186,7 +186,7 @@ impl MerchantAccountTrait for MerchantAccount {
             panic_with_error!(&env, ContractError::AccountRestricted);
         }
 
-        let threshold = self.get_withdrawal_threshold(env.clone());
+        let threshold = Self::get_withdrawal_threshold(env.clone());
         if threshold > 0 && amount > threshold {
             let id = env
                 .storage()
@@ -214,7 +214,7 @@ impl MerchantAccountTrait for MerchantAccount {
             return;
         }
 
-        self.execute_withdrawal(&env, &token, amount, &recipient);
+        Self::execute_withdrawal(&env, &token, amount, &recipient);
     }
 
     fn set_withdrawal_threshold(env: Env, threshold: i128) {
