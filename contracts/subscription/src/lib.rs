@@ -127,6 +127,40 @@ impl SubscriptionContract {
         load_plan(&env, plan_id)
     }
 
+    pub fn get_plan_count(env: Env) -> u64 {
+        get_plan_count(&env)
+    }
+
+    /// Update the billing amount for an existing plan.
+    /// Only the plan's merchant may call this; existing subscriptions are not
+    /// retroactively affected until the next charge cycle.
+    pub fn update_plan_amount(env: Env, merchant: Address, plan_id: u64, new_amount: i128) {
+        merchant.require_auth();
+        if new_amount <= 0 {
+            panic_with_error!(&env, SubscriptionError::InvalidAmount);
+        }
+        let mut plan = load_plan(&env, plan_id);
+        if plan.merchant != merchant {
+            panic_with_error!(&env, SubscriptionError::NotAuthorized);
+        }
+        plan.amount = new_amount;
+        env.storage().persistent().set(&DataKey::Plan(plan_id), &plan);
+    }
+
+    /// Update the billing interval for an existing plan (in seconds).
+    pub fn update_plan_interval(env: Env, merchant: Address, plan_id: u64, new_interval: u64) {
+        merchant.require_auth();
+        if new_interval == 0 {
+            panic_with_error!(&env, SubscriptionError::InvalidInterval);
+        }
+        let mut plan = load_plan(&env, plan_id);
+        if plan.merchant != merchant {
+            panic_with_error!(&env, SubscriptionError::NotAuthorized);
+        }
+        plan.interval = new_interval;
+        env.storage().persistent().set(&DataKey::Plan(plan_id), &plan);
+    }
+
     pub fn deactivate_plan(env: Env, merchant: Address, plan_id: u64) {
         merchant.require_auth();
         let mut plan = load_plan(&env, plan_id);
