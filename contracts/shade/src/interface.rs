@@ -1,6 +1,7 @@
 use crate::types::{
-    Invoice, InvoiceFilter, Merchant, MerchantFilter, PendingFee, Role, Subscription,
-    SubscriptionPlan,
+    CrossChainBridgePayload, Event, Invoice, InvoiceFilter, Merchant, MerchantAnalytics,
+    MerchantAnalyticsSummary, MerchantFilter, OracleConfig, PendingFee, Role, Subscription,
+    SubscriptionPlan, TokenAnalytics, Transaction
 };
 use soroban_sdk::{contracttrait, Address, BytesN, Env, String, Vec};
 
@@ -15,6 +16,10 @@ pub trait ShadeTrait {
     fn set_account_wasm_hash(env: Env, admin: Address, wasm_hash: soroban_sdk::BytesN<32>);
     fn set_fee(env: Env, admin: Address, token: Address, fee: i128);
     fn get_fee(env: Env, token: Address) -> i128;
+    fn set_platform_account(env: Env, admin: Address, account: Address);
+    fn get_platform_account(env: Env) -> Address;
+    fn set_token_oracle(env: Env, admin: Address, token: Address, oracle: OracleConfig);
+    fn get_token_oracle(env: Env, token: Address) -> OracleConfig;
     fn propose_fee(env: Env, admin: Address, token: Address, fee: i128);
     fn execute_fee(env: Env, admin: Address, token: Address);
     fn get_pending_fee(env: Env, token: Address) -> PendingFee;
@@ -31,6 +36,16 @@ pub trait ShadeTrait {
         merchant: Address,
         description: String,
         amount: i128,
+        token: Address,
+        expires_at: Option<u64>,
+    ) -> u64;
+    fn create_fiat_invoice(
+        env: Env,
+        merchant: Address,
+        description: String,
+        fiat_amount: i128,
+        fiat_currency: String,
+        fiat_decimals: u32,
         token: Address,
         expires_at: Option<u64>,
     ) -> u64;
@@ -55,6 +70,7 @@ pub trait ShadeTrait {
         signature: BytesN<64>,
     ) -> u64;
     fn get_invoice(env: Env, invoice_id: u64) -> Invoice;
+    fn resolve_invoice_amount(env: Env, invoice_id: u64) -> i128;
     fn refund_invoice(env: Env, merchant: Address, invoice_id: u64);
     fn set_merchant_key(env: Env, merchant: Address, key: BytesN<32>);
     fn get_merchant_key(env: Env, merchant: Address) -> BytesN<32>;
@@ -62,7 +78,7 @@ pub trait ShadeTrait {
     fn revoke_role(env: Env, admin: Address, user: Address, role: Role);
     fn has_role(env: Env, user: Address, role: Role) -> bool;
     fn get_invoices(env: Env, filter: InvoiceFilter) -> Vec<Invoice>;
-    fn refund_invoice_partial(env: Env, invoice_id: u64, amount: i128);
+    fn refund_invoice_partial(env: Env, merchant: Address, invoice_id: u64, amount: i128);
     fn pause(env: Env, admin: Address);
     fn unpause(env: Env, admin: Address);
     fn is_paused(env: Env) -> bool;
@@ -73,11 +89,16 @@ pub trait ShadeTrait {
         merchant_address: Address,
         status: bool,
     );
+    fn calculate_fee(env: Env, merchant: Address, token: Address, amount: i128) -> i128;
+    fn get_merchant_volume(env: Env, merchant: Address, token: Address) -> i128;
+    fn get_merchant_analytics(env: Env, merchant: Address, token: Address) -> MerchantAnalytics;
+    fn get_merchant_analytics_summary(env: Env, merchant: Address) -> MerchantAnalyticsSummary;
     fn set_merchant_account(env: Env, merchant: Address, account: Address);
     fn get_merchant_account(env: Env, merchant_id: u64) -> Address;
     fn pay_invoice(env: Env, payer: Address, invoice_id: u64);
     fn pay_invoices_batch(env: Env, payer: Address, invoice_ids: Vec<u64>);
     fn pay_invoice_partial(env: Env, payer: Address, invoice_id: u64, amount: i128);
+    fn validate_payment_payload(env: Env, payload: PaymentPayload);
     fn void_invoice(env: Env, merchant: Address, invoice_id: u64);
     fn amend_invoice(
         env: Env,
@@ -86,6 +107,9 @@ pub trait ShadeTrait {
         new_amount: Option<i128>,
         new_description: Option<String>,
     );
+
+    fn set_merchant_webhook(env: Env, merchant: Address, webhook: String);
+    fn get_merchant_webhook(env: Env, merchant_id: u64) -> String;
 
     fn set_merchant_accepted_tokens(env: Env, merchant: Address, tokens: Vec<Address>);
     fn get_merchant_accepted_tokens(env: Env, merchant: Address) -> Vec<Address>;
@@ -132,4 +156,43 @@ pub trait ShadeTrait {
 
     /// Cancel a subscription. Either the customer or the merchant may call this.
     fn cancel_subscription(env: Env, caller: Address, subscription_id: u64);
+
+    /// Get all transactions executed by a specific customer address.
+    fn get_user_transactions(env: Env, user: Address) -> Vec<Transaction>;
+
+    // ── Cross-chain bridge placeholder ───────────────────────────────────────
+    fn emit_bridge_placeholder(
+        env: Env,
+        caller: Address,
+        payload: CrossChainBridgePayload,
+    );
+
+    // --- Event system ---
+    fn create_event(
+        env: Env,
+        merchant: Address,
+        name: String,
+        ticket_price: i128,
+        token: Address,
+        capacity: u32,
+    ) -> u64;
+    fn purchase_ticket(env: Env, event_id: u64, buyer: Address);
+    fn get_event(env: Env, event_id: u64) -> Event;
+
+    // ── Token analytics ────────────────────────────────────────────────────────
+
+    /// Get comprehensive analytics for a specific token
+    fn get_token_analytics(env: Env, token: Address) -> TokenAnalytics;
+
+    /// Get total volume for a specific token
+    fn get_token_volume(env: Env, token: Address) -> i128;
+
+    /// Get token dominance metrics sorted by volume (descending)
+    fn get_token_dominance_metrics(env: Env, tokens: Vec<Address>) -> Vec<(Address, i128)>;
+
+    /// Get top tokens by volume with limit
+    fn get_top_tokens_by_volume(env: Env, limit: u32) -> Vec<(Address, i128)>;
+
+    /// Get market share of a token as basis points (10000 = 100%)
+    fn get_token_market_share(env: Env, token: Address) -> i128;
 }

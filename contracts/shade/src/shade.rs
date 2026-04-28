@@ -2,13 +2,16 @@ use crate::components::{
     access_control as access_control_component, admin as admin_component, core as core_component,
     invoice as invoice_component, merchant as merchant_component, pausable as pausable_component,
     subscription as subscription_component, upgrade as upgrade_component,
+    history as history_component, payment as payment_component,
 };
 use crate::errors::ContractError;
 use crate::events;
 use crate::interface::ShadeTrait;
 use crate::types::{
-    ContractInfo, DataKey, Invoice, InvoiceFilter, Merchant, MerchantFilter, PendingFee, Role,
-    Subscription, SubscriptionPlan,
+    ContractInfo, CrossChainBridgePayload, DataKey, Event, Invoice, InvoiceFilter, Merchant,
+    MerchantAnalytics, MerchantAnalyticsSummary, MerchantFilter, OracleConfig, PaymentPayload,
+    PaymentRoute, PendingFee, Role, Subscription, SubscriptionPlan, SwapRoute, TokenAnalytics,
+    Transaction
 };
 use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env, String, Vec};
 
@@ -26,6 +29,9 @@ impl ShadeTrait for Shade {
             timestamp: env.ledger().timestamp(),
         };
         env.storage().persistent().set(&DataKey::Admin, &admin);
+        env.storage()
+            .persistent()
+            .set(&DataKey::PlatformAccount, &admin);
         env.storage()
             .persistent()
             .set(&DataKey::ContractInfo, &contract_info);
@@ -66,6 +72,24 @@ impl ShadeTrait for Shade {
 
     fn get_fee(env: Env, token: Address) -> i128 {
         admin_component::get_fee(&env, &token)
+    }
+
+    fn set_platform_account(env: Env, admin: Address, account: Address) {
+        pausable_component::assert_not_paused(&env);
+        admin_component::set_platform_account(&env, &admin, &account);
+    }
+
+    fn get_platform_account(env: Env) -> Address {
+        admin_component::get_platform_account(&env)
+    }
+
+    fn set_token_oracle(env: Env, admin: Address, token: Address, oracle: OracleConfig) {
+        pausable_component::assert_not_paused(&env);
+        admin_component::set_token_oracle(&env, &admin, &token, &oracle);
+    }
+
+    fn get_token_oracle(env: Env, token: Address) -> OracleConfig {
+        admin_component::get_token_oracle(&env, &token)
     }
 
     fn propose_fee(env: Env, admin: Address, token: Address, fee: i128) {
@@ -127,6 +151,29 @@ impl ShadeTrait for Shade {
         invoice_component::create_invoice(&env, &merchant, &description, amount, &token, expires_at)
     }
 
+    fn create_fiat_invoice(
+        env: Env,
+        merchant: Address,
+        description: String,
+        fiat_amount: i128,
+        fiat_currency: String,
+        fiat_decimals: u32,
+        token: Address,
+        expires_at: Option<u64>,
+    ) -> u64 {
+        pausable_component::assert_not_paused(&env);
+        invoice_component::create_fiat_invoice(
+            &env,
+            &merchant,
+            &description,
+            fiat_amount,
+            &fiat_currency,
+            fiat_decimals,
+            &token,
+            expires_at,
+        )
+    }
+
     fn create_invoice_draft(
         env: Env,
         merchant: Address,
@@ -179,6 +226,10 @@ impl ShadeTrait for Shade {
         invoice_component::get_invoice(&env, invoice_id)
     }
 
+    fn resolve_invoice_amount(env: Env, invoice_id: u64) -> i128 {
+        invoice_component::resolve_invoice_amount(&env, invoice_id)
+    }
+
     fn refund_invoice(env: Env, merchant: Address, invoice_id: u64) {
         pausable_component::assert_not_paused(&env);
         invoice_component::refund_invoice(&env, &merchant, invoice_id);
@@ -208,9 +259,9 @@ impl ShadeTrait for Shade {
         invoice_component::get_invoices(&env, filter)
     }
 
-    fn refund_invoice_partial(env: Env, invoice_id: u64, amount: i128) {
+    fn refund_invoice_partial(env: Env, merchant: Address, invoice_id: u64, amount: i128) {
         pausable_component::assert_not_paused(&env);
-        invoice_component::refund_invoice_partial(&env, invoice_id, amount);
+        invoice_component::refund_invoice_partial(&env, &merchant, invoice_id, amount);
     }
 
     fn pause(env: Env, admin: Address) {
@@ -238,6 +289,37 @@ impl ShadeTrait for Shade {
         merchant_component::restrict_merchant_account(&env, &caller, &merchant_address, status);
     }
 
+    fn calculate_fee(env: Env, merchant: Address, token: Address, amount: i128) -> i128 {
+        admin_component::calculate_fee(&env, &merchant, &token, amount)
+    }
+
+    fn get_merchant_volume(env: Env, merchant: Address, token: Address) -> i128 {
+        admin_component::get_merchant_volume(&env, &merchant, &token)
+    }
+    fn get_daily_volume(env: Env, token: Address) -> i128 {
+        admin_component::get_daily_volume(&env, &token)
+    }
+
+    fn get_weekly_volume(env: Env, token: Address) -> i128 {
+        admin_component::get_weekly_volume(&env, &token)
+    }
+
+    fn get_merchant_daily_volume(env: Env, merchant: Address, token: Address) -> i128 {
+        admin_component::get_merchant_daily_volume(&env, &merchant, &token)
+    }
+
+    fn get_merchant_weekly_volume(env: Env, merchant: Address, token: Address) -> i128 {
+        admin_component::get_merchant_weekly_volume(&env, &merchant, &token)
+    }
+
+    fn get_merchant_analytics(env: Env, merchant: Address, token: Address) -> MerchantAnalytics {
+        admin_component::get_merchant_analytics(&env, &merchant, &token)
+    }
+
+    fn get_merchant_analytics_summary(env: Env, merchant: Address) -> MerchantAnalyticsSummary {
+        admin_component::get_merchant_analytics_summary(&env, &merchant)
+    }
+
     fn set_merchant_account(env: Env, merchant: Address, account: Address) {
         merchant_component::set_merchant_account(&env, &merchant, &account);
     }
@@ -259,6 +341,10 @@ impl ShadeTrait for Shade {
     fn pay_invoice_partial(env: Env, payer: Address, invoice_id: u64, amount: i128) {
         pausable_component::assert_not_paused(&env);
         invoice_component::pay_invoice_partial(&env, &payer, invoice_id, amount);
+    }
+
+    fn validate_payment_payload(env: Env, payload: crate::types::PaymentPayload) {
+        crate::components::payment::validate_payment_payload(&env, &payload);
     }
 
     fn void_invoice(env: Env, merchant: Address, invoice_id: u64) {
@@ -329,6 +415,15 @@ impl ShadeTrait for Shade {
         subscription_component::cancel_subscription(&env, caller, subscription_id);
     }
 
+    fn set_merchant_webhook(env: Env, merchant: Address, webhook: String) {
+        pausable_component::assert_not_paused(&env);
+        merchant_component::set_merchant_webhook(&env, &merchant, &webhook);
+    }
+
+    fn get_merchant_webhook(env: Env, merchant_id: u64) -> String {
+        merchant_component::get_merchant_webhook(&env, merchant_id)
+    }
+
     fn set_merchant_accepted_tokens(env: Env, merchant: Address, tokens: Vec<Address>) {
         pausable_component::assert_not_paused(&env);
         merchant_component::set_merchant_accepted_tokens(&env, &merchant, &tokens);
@@ -345,5 +440,66 @@ impl ShadeTrait for Shade {
 
     fn is_token_accepted_for_merchant(env: Env, merchant: Address, token: Address) -> bool {
         merchant_component::is_token_accepted_for_merchant(&env, &merchant, &token)
+    }
+
+    fn get_user_transactions(env: Env, user: Address) -> Vec<Transaction> {
+        history_component::get_user_transactions(&env, user)
+    }
+    
+    fn emit_bridge_placeholder(
+        env: Env,
+        caller: Address,
+        payload: CrossChainBridgePayload,
+    ) {
+        pausable_component::assert_not_paused(&env);
+        caller.require_auth();
+        events::publish_bridge_placeholder_event(
+            &env,
+            caller,
+            payload,
+            env.ledger().timestamp(),
+        );
+    }
+
+    // --- Event system ---
+    fn create_event(
+        env: Env,
+        merchant: Address,
+        name: String,
+        ticket_price: i128,
+        token: Address,
+        capacity: u32,
+    ) -> u64 {
+        pausable_component::assert_not_paused(&env);
+        crate::components::event::create_event(&env, &merchant, &name, &ticket_price, &token, &capacity)
+    }
+
+    fn purchase_ticket(env: Env, event_id: u64, buyer: Address) {
+        pausable_component::assert_not_paused(&env);
+        crate::components::event::purchase_ticket(&env, &event_id, &buyer);
+    }
+
+    fn get_event(env: Env, event_id: u64) -> crate::types::Event {
+        crate::components::event::get_event(&env, &event_id)
+    }
+
+    fn get_token_analytics(env: Env, token: Address) -> TokenAnalytics {
+        admin_component::get_token_analytics(&env, &token)
+    }
+
+    fn get_token_volume(env: Env, token: Address) -> i128 {
+        admin_component::get_token_volume(&env, &token)
+    }
+
+    fn get_token_dominance_metrics(env: Env, tokens: Vec<Address>) -> Vec<(Address, i128)> {
+        admin_component::get_token_dominance_metrics(&env, &tokens)
+    }
+
+    fn get_top_tokens_by_volume(env: Env, limit: u32) -> Vec<(Address, i128)> {
+        admin_component::get_top_tokens_by_volume(&env, limit)
+    }
+
+    fn get_token_market_share(env: Env, token: Address) -> i128 {
+        admin_component::get_token_market_share(&env, &token)
     }
 }

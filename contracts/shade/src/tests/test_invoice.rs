@@ -156,7 +156,7 @@ fn test_create_multiple_invoices() {
 #[should_panic(expected = "HostError: Error(Contract, #8)")]
 #[test]
 fn test_get_invoice_not_found() {
-    let (_env, client, _contract_id, admin) = setup_test();
+    let (_env, client, _contract_id, _admin) = setup_test();
     client.get_invoice(&999);
 }
 
@@ -443,7 +443,7 @@ fn test_pay_cancelled_invoice() {
 #[test]
 #[should_panic(expected = "HostError: Error(Contract, #8)")]
 fn test_void_non_existent_invoice() {
-    let (env, client, _contract_id, admin) = setup_test();
+    let (env, client, _contract_id, _admin) = setup_test();
 
     let merchant = Address::generate(&env);
     client.register_merchant(&merchant);
@@ -649,7 +649,7 @@ fn test_amend_invoice_negative_amount_fails() {
 #[test]
 #[should_panic(expected = "HostError: Error(Contract, #8)")]
 fn test_amend_non_existent_invoice_fails() {
-    let (env, client, _contract_id, admin) = setup_test();
+    let (env, client, _contract_id, _admin) = setup_test();
 
     let merchant = Address::generate(&env);
     client.register_merchant(&merchant);

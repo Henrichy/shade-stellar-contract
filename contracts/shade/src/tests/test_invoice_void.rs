@@ -211,7 +211,7 @@ fn test_void_invoice_already_cancelled() {
 #[test]
 #[should_panic(expected = "HostError: Error(Contract, #8)")]
 fn test_void_nonexistent_invoice() {
-    let (env, client, _contract_id, admin) = setup_test();
+    let (env, client, _contract_id, _admin) = setup_test();
 
     let merchant = Address::generate(&env);
     client.register_merchant(&merchant);

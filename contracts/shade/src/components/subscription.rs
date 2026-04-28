@@ -1,7 +1,7 @@
-use crate::components::{admin, merchant};
+use crate::components::{admin, history, merchant};
 use crate::errors::ContractError;
 use crate::events;
-use crate::types::{DataKey, Subscription, SubscriptionPlan, SubscriptionStatus};
+use crate::types::{DataKey, Subscription, SubscriptionPlan, SubscriptionStatus, Transaction, TransactionType};
 use soroban_sdk::{panic_with_error, token, Address, Env, String};
 
 // TODO: create a functionality for bulk subscription plan charging
@@ -47,7 +47,7 @@ pub fn create_subscription_plan(
         panic_with_error!(env, ContractError::TokenNotAccepted);
     }
 
-    let fee_amount = admin::calculate_fee(env, &token, amount);
+    let fee_amount = admin::calculate_fee(env, &merchant, &token, amount);
     if amount < fee_amount {
         panic_with_error!(env, ContractError::InvalidAmount);
     }
@@ -141,17 +141,19 @@ pub fn charge_subscription(env: &Env, subscription_id: u64) {
         panic_with_error!(env, ContractError::ChargeTooEarly);
     }
 
-    let fee = admin::calculate_fee(env, &plan.token, plan.amount);
+    let fee = admin::calculate_fee(env, &plan.merchant, &plan.token, plan.amount);
     let merchant_amount = plan.amount - fee;
 
     let token_client = token::TokenClient::new(env, &plan.token);
     let merchant_account = merchant::get_merchant_account(env, plan.merchant_id);
+    let platform_account = admin::get_platform_account(env);
     let spender = env.current_contract_address();
 
     token_client.transfer_from(&spender, &sub.customer, &merchant_account, &merchant_amount);
     if fee > 0 {
-        token_client.transfer_from(&spender, &sub.customer, &spender, &fee);
+        token_client.transfer_from(&spender, &sub.customer, &platform_account, &fee);
     }
+    admin::record_merchant_payment(env, &plan.merchant, &plan.token, plan.amount, fee);
 
     sub.last_charged = now;
     env.storage()
@@ -169,6 +171,17 @@ pub fn charge_subscription(env: &Env, subscription_id: u64) {
         plan.token.clone(),
         now,
     );
+
+    let transaction = Transaction {
+        transaction_type: TransactionType::SubscriptionCharge,
+        ref_id: subscription_id,
+        amount: plan.amount,
+        token: plan.token.clone(),
+        description: plan.description.clone(),
+        date: now,
+        merchant_id: plan.merchant_id,
+    };
+    history::record_transaction(env, &sub.customer, transaction);
 }
 
 pub fn cancel_subscription(env: &Env, caller: Address, subscription_id: u64) {

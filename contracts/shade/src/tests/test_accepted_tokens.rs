@@ -203,7 +203,6 @@ fn test_invalid_token_address_panics() {
 
     let admin = Address::generate(&env);
     client.initialize(&admin);
-
     let invalid_token = Address::generate(&env);
     client.add_accepted_token(&admin, &invalid_token);
 }

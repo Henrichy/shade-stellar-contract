@@ -1,4 +1,4 @@
-use soroban_sdk::{contractevent, Address, BytesN, Env, Vec};
+use soroban_sdk::{contractevent, Address, BytesN, Env, String, Vec};
 
 // ── Existing events ───────────────────────────────────────────────────────────
 
@@ -188,6 +188,30 @@ pub fn publish_merchant_verified_event(env: &Env, merchant_id: u64, status: bool
 }
 
 #[contractevent]
+pub struct MerchantWebhookSetEvent {
+    pub merchant: Address,
+    pub merchant_id: u64,
+    pub webhook: String,
+    pub timestamp: u64,
+}
+
+pub fn publish_merchant_webhook_set_event(
+    env: &Env,
+    merchant: Address,
+    merchant_id: u64,
+    webhook: String,
+    timestamp: u64,
+) {
+    MerchantWebhookSetEvent {
+        merchant,
+        merchant_id,
+        webhook,
+        timestamp,
+    }
+    .publish(env);
+}
+
+#[contractevent]
 pub struct MerchantKeySetEvent {
     pub merchant: Address,
     pub key: BytesN<32>,
@@ -319,6 +343,51 @@ pub fn publish_fee_set_event(env: &Env, admin: Address, token: Address, fee: i12
 }
 
 #[contractevent]
+pub struct PlatformAccountSetEvent {
+    pub admin: Address,
+    pub account: Address,
+    pub timestamp: u64,
+}
+
+pub fn publish_platform_account_set_event(
+    env: &Env,
+    admin: Address,
+    account: Address,
+    timestamp: u64,
+) {
+    PlatformAccountSetEvent {
+        admin,
+        account,
+        timestamp,
+    }
+    .publish(env);
+}
+
+#[contractevent]
+pub struct TokenOracleSetEvent {
+    pub admin: Address,
+    pub token: Address,
+    pub oracle: Address,
+    pub timestamp: u64,
+}
+
+pub fn publish_token_oracle_set_event(
+    env: &Env,
+    admin: Address,
+    token: Address,
+    oracle: Address,
+    timestamp: u64,
+) {
+    TokenOracleSetEvent {
+        admin,
+        token,
+        oracle,
+        timestamp,
+    }
+    .publish(env);
+}
+
+#[contractevent]
 pub struct ContractUpgradedEvent {
     pub new_wasm_hash: BytesN<32>,
     pub timestamp: u64,
@@ -351,6 +420,30 @@ pub fn publish_account_restricted_event(
         merchant,
         status,
         caller,
+        timestamp,
+    }
+    .publish(env);
+}
+
+#[contractevent]
+pub struct FeeDiscountAppliedEvent {
+    pub merchant: Address,
+    pub volume: i128,
+    pub discount_bps: i128,
+    pub timestamp: u64,
+}
+
+pub fn publish_fee_discount_applied_event(
+    env: &Env,
+    merchant: Address,
+    volume: i128,
+    discount_bps: i128,
+    timestamp: u64,
+) {
+    FeeDiscountAppliedEvent {
+        merchant,
+        volume,
+        discount_bps,
         timestamp,
     }
     .publish(env);
@@ -391,6 +484,63 @@ pub fn publish_invoice_paid_event(
         amount,
         fee,
         merchant_amount,
+        token,
+        timestamp,
+    }
+    .publish(env);
+}
+
+#[contractevent]
+pub struct FiatInvoicePricedEvent {
+    pub invoice_id: u64,
+    pub token: Address,
+    pub resolved_amount: i128,
+    pub timestamp: u64,
+}
+
+pub fn publish_fiat_invoice_priced_event(
+    env: &Env,
+    invoice_id: u64,
+    token: Address,
+    resolved_amount: i128,
+    timestamp: u64,
+) {
+    FiatInvoicePricedEvent {
+        invoice_id,
+        token,
+        resolved_amount,
+        timestamp,
+    }
+    .publish(env);
+}
+
+#[contractevent]
+pub struct PaymentSplitRoutedEvent {
+    pub invoice_id: u64,
+    pub merchant_account: Address,
+    pub platform_account: Address,
+    pub merchant_amount: i128,
+    pub platform_amount: i128,
+    pub token: Address,
+    pub timestamp: u64,
+}
+
+pub fn publish_payment_split_routed_event(
+    env: &Env,
+    invoice_id: u64,
+    merchant_account: Address,
+    platform_account: Address,
+    merchant_amount: i128,
+    platform_amount: i128,
+    token: Address,
+    timestamp: u64,
+) {
+    PaymentSplitRoutedEvent {
+        invoice_id,
+        merchant_account,
+        platform_account,
+        merchant_amount,
+        platform_amount,
         token,
         timestamp,
     }
@@ -461,6 +611,27 @@ pub fn publish_nonce_invalidated_event(
     NonceInvalidatedEvent {
         merchant,
         nonce,
+        timestamp,
+    }
+    .publish(env);
+}
+
+#[contractevent]
+pub struct BridgePlaceholderEvent {
+    pub caller: Address,
+    pub payload: crate::types::CrossChainBridgePayload,
+    pub timestamp: u64,
+}
+
+pub fn publish_bridge_placeholder_event(
+    env: &Env,
+    caller: Address,
+    payload: crate::types::CrossChainBridgePayload,
+    timestamp: u64,
+) {
+    BridgePlaceholderEvent {
+        caller,
+        payload,
         timestamp,
     }
     .publish(env);
