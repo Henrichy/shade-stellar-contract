@@ -178,6 +178,7 @@ pub trait ShadeTrait {
     ) -> u64;
     fn purchase_ticket(env: Env, event_id: u64, buyer: Address);
     fn get_event(env: Env, event_id: u64) -> Event;
+    fn cancel_event(env: Env, event_id: u64, merchant: Address);
 
     // ── Token analytics ────────────────────────────────────────────────────────
 

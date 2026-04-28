@@ -1,6 +1,7 @@
 #![cfg(test)]
 
 use crate::shade::{Shade, ShadeClient};
+use crate::types::EventStatus;
 use soroban_sdk::testutils::{Address as _};
 use soroban_sdk::{Address, Env, String};
 
@@ -41,18 +42,24 @@ fn test_event_creation_and_purchase() {
     assert_eq!(event.name, String::from_str(&env, "Concert"));
     assert_eq!(event.capacity, 2);
     assert_eq!(event.sold, 0);
+    assert_eq!(event.status, EventStatus::Active);
 
     let buyer1 = Address::generate(&env);
     client.purchase_ticket(&event_id, &buyer1);
     
     let event = client.get_event(&event_id);
     assert_eq!(event.sold, 1);
+    assert_eq!(event.holders.len(), 1);
+    assert_eq!(event.holders.get(0).unwrap(), buyer1);
 
     let buyer2 = Address::generate(&env);
     client.purchase_ticket(&event_id, &buyer2);
     
     let event = client.get_event(&event_id);
     assert_eq!(event.sold, 2);
+    assert_eq!(event.holders.len(), 2);
+    assert_eq!(event.holders.get(0).unwrap(), buyer1);
+    assert_eq!(event.holders.get(1).unwrap(), buyer2);
 }
 
 #[test]
@@ -78,4 +85,64 @@ fn test_event_sold_out() {
 
     let buyer2 = Address::generate(&env);
     client.purchase_ticket(&event_id, &buyer2); // Should panic
+}
+
+#[test]
+fn test_cancel_event() {
+    let (env, client, _shade_id, admin) = setup_test();
+    let token = create_test_token(&env);
+    client.add_accepted_token(&admin, &token);
+
+    let merchant = Address::generate(&env);
+    client.register_merchant(&merchant);
+
+    let event_id = client.create_event(
+        &merchant,
+        &String::from_str(&env, "Concert"),
+        &100,
+        &token,
+        &5,
+    );
+
+    let buyer1 = Address::generate(&env);
+    let buyer2 = Address::generate(&env);
+    let buyer3 = Address::generate(&env);
+    
+    client.purchase_ticket(&event_id, &buyer1);
+    client.purchase_ticket(&event_id, &buyer2);
+    client.purchase_ticket(&event_id, &buyer3);
+
+    let event = client.get_event(&event_id);
+    assert_eq!(event.status, EventStatus::Active);
+    assert_eq!(event.sold, 3);
+    assert_eq!(event.holders.len(), 3);
+
+    client.cancel_event(&event_id, &merchant);
+
+    let event = client.get_event(&event_id);
+    assert_eq!(event.status, EventStatus::Cancelled);
+}
+
+#[test]
+#[should_panic]
+fn test_cannot_purchase_after_cancel() {
+    let (env, client, _shade_id, admin) = setup_test();
+    let token = create_test_token(&env);
+    client.add_accepted_token(&admin, &token);
+
+    let merchant = Address::generate(&env);
+    client.register_merchant(&merchant);
+
+    let event_id = client.create_event(
+        &merchant,
+        &String::from_str(&env, "Concert"),
+        &100,
+        &token,
+        &5,
+    );
+
+    client.cancel_event(&event_id, &merchant);
+
+    let buyer = Address::generate(&env);
+    client.purchase_ticket(&event_id, &buyer);
 }
