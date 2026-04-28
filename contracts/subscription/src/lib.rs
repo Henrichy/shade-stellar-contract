@@ -242,6 +242,33 @@ impl SubscriptionContract {
         token_client.approve(&customer, &spender, &allowance_amount, &ledger_expiry);
     }
 
+    /// Return the current token allowance the contract holds from a customer.
+    /// Callers can use this to verify a sufficient allowance exists before
+    /// attempting a charge.
+    pub fn get_billing_allowance(env: Env, customer: Address, sub_id: u64) -> i128 {
+        let sub = load_subscription(&env, sub_id);
+        let plan = load_plan(&env, sub.plan_id);
+        let token_client = token::TokenClient::new(&env, &plan.token);
+        let spender = env.current_contract_address();
+        token_client.allowance(&customer, &spender)
+    }
+
+    /// Revoke the contract's spending allowance for a customer on a given
+    /// subscription.  This effectively prevents future automatic charges
+    /// without cancelling the subscription record.
+    pub fn revoke_billing_authorization(env: Env, customer: Address, sub_id: u64) {
+        customer.require_auth();
+        let sub = load_subscription(&env, sub_id);
+        if sub.customer != customer {
+            panic_with_error!(&env, SubscriptionError::NotAuthorized);
+        }
+        let plan = load_plan(&env, sub.plan_id);
+        let token_client = token::TokenClient::new(&env, &plan.token);
+        let spender = env.current_contract_address();
+        let current_seq = env.ledger().sequence();
+        token_client.approve(&customer, &spender, &0_i128, &current_seq);
+    }
+
     /// Charge the next billing cycle for a subscription.
     pub fn charge(env: Env, sub_id: u64) {
         let mut sub = load_subscription(&env, sub_id);
