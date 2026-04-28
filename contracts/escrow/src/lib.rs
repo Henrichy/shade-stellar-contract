@@ -1,4 +1,5 @@
 #![no_std]
+use soroban_sdk::{contract, contractevent, contractimpl, contracttype, token, Address, Env, String};
 
 mod errors;
 
@@ -18,6 +19,9 @@ enum DataKey {
     Arbiter,
     Terms,
     Token,
+    Amount,
+    Status,
+    Deadline,
     TotalAmount,
     Status,
     PlatformAccount,
@@ -39,6 +43,11 @@ pub struct Milestone {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum EscrowStatus {
+    Pending,
+    Completed,
+    Disputed,
+    Resolved,
+    Expired,
     Pending = 0,
     Completed = 1,
     Disputed = 2,
