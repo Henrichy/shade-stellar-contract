@@ -3,9 +3,10 @@
 mod errors;
 
 use crate::errors::TicketingError;
-use soroban_sdk::{contract, contractimpl, contracttype, panic_with_error, Address, BytesN, Env, String, Vec};
-
-const HASH_LENGTH: usize = 32;
+use soroban_sdk::{
+    contract, contractevent, contractimpl, contracttype, panic_with_error, Address, BytesN, Env,
+    String, Vec,
+};
 
 // ── Data Structures ────────────────────────────────────────────────────────────
 
@@ -413,6 +414,11 @@ impl TicketingContract {
             .persistent()
             .get(&DataKey::Ticket(ticket_id))
             .unwrap_or_else(|| panic_with_error!(env, TicketingError::TicketNotFound));
+
+        // Only event organizer can mark tickets as consumed.
+        if !is_event_organizer(&env, ticket.event_id, &operator) {
+            panic_with_error!(env, TicketingError::NotAuthorized);
+        }
 
         // Prevent double check-in (idempotency)
         if ticket.checked_in {
