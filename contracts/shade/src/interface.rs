@@ -184,6 +184,16 @@ pub trait ShadeTrait {
         royalty_bps: u32,
     ) -> u64;
     fn purchase_ticket(env: Env, event_id: u64, buyer: Address) -> u64;
+    fn configure_dynamic_pricing(
+        env: Env,
+        merchant: Address,
+        event_id: u64,
+        early_bird_end: u64,
+        early_bird_discount_bps: u32,
+        late_markup_bps: u32,
+    );
+    fn get_current_ticket_price(env: Env, event_id: u64) -> i128;
+    fn cancel_event_and_batch_refund(env: Env, merchant: Address, event_id: u64);
     fn resell_ticket(
         env: Env,
         seller: Address,

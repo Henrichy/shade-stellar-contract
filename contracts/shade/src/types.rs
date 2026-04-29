@@ -130,25 +130,6 @@ pub struct Invoice {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Invoice {
-    pub id: u64,
-    pub description: soroban_sdk::String,
-    pub amount: i128,
-    pub token: Address,
-    pub status: InvoiceStatus,
-    pub merchant_id: u64,
-    pub payer: Option<Address>,
-    pub date_created: u64,
-    pub date_paid: Option<u64>,
-    pub amount_paid: i128,
-    pub amount_refunded: i128,
-    pub expires_at: Option<u64>,
-    pub pricing_mode: InvoicePricingMode,
-    pub fiat_pricing: Option<FiatPricing>,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MerchantFilter {
     pub is_active: Option<bool>,
     pub is_verified: Option<bool>,
@@ -324,6 +305,16 @@ pub struct Event {
     pub event_date: u64,
     /// Royalty paid to the organizer on each resale, in basis points (10_000 = 100%).
     pub royalty_bps: u32,
+    /// Early-bird cutoff timestamp. `0` disables early-bird pricing.
+    pub early_bird_end: u64,
+    /// Discount during early-bird period, in basis points.
+    pub early_bird_discount_bps: u32,
+    /// Markup applied after early-bird period, in basis points.
+    pub late_markup_bps: u32,
+    /// True once the event is cancelled.
+    pub cancelled: bool,
+    /// True once all ticket refunds have been processed.
+    pub refunds_processed: bool,
 }
 
 #[contracttype]
@@ -333,6 +324,8 @@ pub struct Ticket {
     pub event_id: u64,
     pub owner: Address,
     pub minted_at: u64,
+    /// Amount paid on primary purchase, used for cancellation refunds.
+    pub purchase_price: i128,
 }
 
 #[contracttype]

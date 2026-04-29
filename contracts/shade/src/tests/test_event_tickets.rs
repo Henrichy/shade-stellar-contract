@@ -59,7 +59,7 @@ fn register_merchant_with_account(
     token: &Address,
 ) -> (Address, Address) {
     let merchant = Address::generate(env);
-    let merchant_account = Address::generate(env);
+    let merchant_account = merchant.clone();
     client.register_merchant(&merchant);
     client.set_merchant_account(&merchant, &merchant_account);
     client.set_merchant_accepted_tokens(
@@ -431,4 +431,107 @@ fn resale_rejects_unknown_ticket() {
     let a = Address::generate(&f.env);
     let b = Address::generate(&f.env);
     f.client.resell_ticket(&a, &b, &999u64, &100i128);
+}
+
+#[test]
+fn dynamic_pricing_adjusts_over_time() {
+    let f = setup();
+    let (merchant, merchant_account) = register_merchant_with_account(&f.env, &f.client, &f.token);
+
+    let now = f.env.ledger().timestamp();
+    let event_date = now + 10_000;
+    let early_bird_end = now + 1_000;
+    let base_price: i128 = 1_000;
+
+    let event_id = f.client.create_event(
+        &merchant,
+        &String::from_str(&f.env, "Dynamic Price Show"),
+        &base_price,
+        &f.token,
+        &10u32,
+        &event_date,
+        &0u32,
+    );
+
+    f.client
+        .configure_dynamic_pricing(&merchant, &event_id, &early_bird_end, &2_000u32, &5_000u32);
+
+    let buyer_early = Address::generate(&f.env);
+    let buyer_late = Address::generate(&f.env);
+    fund(&f.env, &f.token, &buyer_early, TOKEN_INITIAL_BALANCE);
+    fund(&f.env, &f.token, &buyer_late, TOKEN_INITIAL_BALANCE);
+
+    // During early bird: 20% discount => 800
+    assert_eq!(f.client.get_current_ticket_price(&event_id), 800i128);
+    f.client.purchase_ticket(&event_id, &buyer_early);
+
+    // Move ledger after early bird window: 50% markup => 1500
+    f.env
+        .ledger()
+        .with_mut(|l| l.timestamp = early_bird_end + 1);
+    assert_eq!(f.client.get_current_ticket_price(&event_id), 1_500i128);
+    f.client.purchase_ticket(&event_id, &buyer_late);
+
+    let token_client = TokenClient::new(&f.env, &f.token);
+    assert_eq!(token_client.balance(&merchant_account), 2_300i128);
+}
+
+#[test]
+fn cancel_event_executes_batch_refunds() {
+    let f = setup();
+    let (merchant, _) = register_merchant_with_account(&f.env, &f.client, &f.token);
+
+    let buyer1 = Address::generate(&f.env);
+    let buyer2 = Address::generate(&f.env);
+    fund(&f.env, &f.token, &buyer1, TOKEN_INITIAL_BALANCE);
+    fund(&f.env, &f.token, &buyer2, TOKEN_INITIAL_BALANCE);
+
+    let event_id = f.client.create_event(
+        &merchant,
+        &String::from_str(&f.env, "Cancelable Show"),
+        &500i128,
+        &f.token,
+        &5u32,
+        &future_date(&f.env),
+        &0u32,
+    );
+
+    f.client.purchase_ticket(&event_id, &buyer1);
+    f.client.purchase_ticket(&event_id, &buyer2);
+
+    let token_client = TokenClient::new(&f.env, &f.token);
+    assert_eq!(token_client.balance(&buyer1), TOKEN_INITIAL_BALANCE - 500);
+    assert_eq!(token_client.balance(&buyer2), TOKEN_INITIAL_BALANCE - 500);
+
+    f.client.cancel_event_and_batch_refund(&merchant, &event_id);
+
+    assert_eq!(token_client.balance(&buyer1), TOKEN_INITIAL_BALANCE);
+    assert_eq!(token_client.balance(&buyer2), TOKEN_INITIAL_BALANCE);
+
+    let event = f.client.get_event(&event_id);
+    assert!(event.cancelled);
+    assert!(event.refunds_processed);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #16)")] // InvalidInvoiceStatus
+fn cancel_event_cannot_refund_twice() {
+    let f = setup();
+    let (merchant, _) = register_merchant_with_account(&f.env, &f.client, &f.token);
+    let buyer = Address::generate(&f.env);
+    fund(&f.env, &f.token, &buyer, TOKEN_INITIAL_BALANCE);
+
+    let event_id = f.client.create_event(
+        &merchant,
+        &String::from_str(&f.env, "Single Refund"),
+        &500i128,
+        &f.token,
+        &5u32,
+        &future_date(&f.env),
+        &0u32,
+    );
+
+    f.client.purchase_ticket(&event_id, &buyer);
+    f.client.cancel_event_and_batch_refund(&merchant, &event_id);
+    f.client.cancel_event_and_batch_refund(&merchant, &event_id);
 }
