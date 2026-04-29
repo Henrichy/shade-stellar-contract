@@ -1,7 +1,7 @@
-use crate::components::{admin, merchant};
+use crate::components::{admin, history, merchant};
 use crate::errors::ContractError;
 use crate::events;
-use crate::types::{DataKey, Subscription, SubscriptionPlan, SubscriptionStatus};
+use crate::types::{DataKey, Subscription, SubscriptionPlan, SubscriptionStatus, Transaction, TransactionType};
 use soroban_sdk::{panic_with_error, token, Address, Env, String};
 
 // TODO: create a functionality for bulk subscription plan charging
@@ -94,6 +94,7 @@ pub fn get_subscription_plan(env: &Env, plan_id: u64) -> SubscriptionPlan {
 pub fn subscribe(env: &Env, customer: Address, plan_id: u64) -> u64 {
     // TODO: determine if a customer is allowed to subscribe more than once to the same plan
     // and if so, create a storage for saving the subcription ids of a plan in a list
+    customer.require_auth();
     let plan = get_subscription_plan(env, plan_id);
     if !plan.active {
         panic_with_error!(env, ContractError::PlanNotActive);
@@ -171,6 +172,17 @@ pub fn charge_subscription(env: &Env, subscription_id: u64) {
         plan.token.clone(),
         now,
     );
+
+    let transaction = Transaction {
+        transaction_type: TransactionType::SubscriptionCharge,
+        ref_id: subscription_id,
+        amount: plan.amount,
+        token: plan.token.clone(),
+        description: plan.description.clone(),
+        date: now,
+        merchant_id: plan.merchant_id,
+    };
+    history::record_transaction(env, &sub.customer, transaction);
 }
 
 pub fn cancel_subscription(env: &Env, caller: Address, subscription_id: u64) {

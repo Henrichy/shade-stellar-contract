@@ -1,7 +1,7 @@
 use crate::types::{
-    CrossChainBridgePayload, Invoice, InvoiceFilter, Merchant, MerchantAnalytics,
-    MerchantAnalyticsSummary, MerchantFilter, OracleConfig, PendingFee, Role, Subscription,
-    SubscriptionPlan,
+    CrossChainBridgePayload, Event, Invoice, InvoiceFilter, Merchant, MerchantAnalytics,
+    MerchantAnalyticsSummary, MerchantFilter, OracleConfig, PaymentPayload, PendingFee, Role,
+    Subscription, SubscriptionPlan, Ticket, TokenAnalytics, Transaction
 };
 use soroban_sdk::{contracttrait, Address, BytesN, Env, String, Vec};
 
@@ -78,7 +78,7 @@ pub trait ShadeTrait {
     fn revoke_role(env: Env, admin: Address, user: Address, role: Role);
     fn has_role(env: Env, user: Address, role: Role) -> bool;
     fn get_invoices(env: Env, filter: InvoiceFilter) -> Vec<Invoice>;
-    fn refund_invoice_partial(env: Env, invoice_id: u64, amount: i128);
+    fn refund_invoice_partial(env: Env, merchant: Address, invoice_id: u64, amount: i128);
     fn pause(env: Env, admin: Address);
     fn unpause(env: Env, admin: Address);
     fn is_paused(env: Env) -> bool;
@@ -98,6 +98,7 @@ pub trait ShadeTrait {
     fn pay_invoice(env: Env, payer: Address, invoice_id: u64);
     fn pay_invoices_batch(env: Env, payer: Address, invoice_ids: Vec<u64>);
     fn pay_invoice_partial(env: Env, payer: Address, invoice_id: u64, amount: i128);
+    fn validate_payment_payload(env: Env, payload: PaymentPayload);
     fn void_invoice(env: Env, merchant: Address, invoice_id: u64);
     fn amend_invoice(
         env: Env,
@@ -106,6 +107,9 @@ pub trait ShadeTrait {
         new_amount: Option<i128>,
         new_description: Option<String>,
     );
+
+    fn set_merchant_webhook(env: Env, merchant: Address, webhook: String);
+    fn get_merchant_webhook(env: Env, merchant_id: u64) -> String;
 
     fn set_merchant_accepted_tokens(env: Env, merchant: Address, tokens: Vec<Address>);
     fn get_merchant_accepted_tokens(env: Env, merchant: Address) -> Vec<Address>;
@@ -153,9 +157,81 @@ pub trait ShadeTrait {
     /// Cancel a subscription. Either the customer or the merchant may call this.
     fn cancel_subscription(env: Env, caller: Address, subscription_id: u64);
 
-    fn emit_cross_chain_bridge_placeholder(
+    /// Deactivate a subscription plan so that no new customers can enroll.
+    /// Only the merchant who owns the plan may call this.
+    fn deactivate_plan(env: Env, caller: Address, plan_id: u64);
+
+    /// Get all transactions executed by a specific customer address.
+    fn get_user_transactions(env: Env, user: Address) -> Vec<Transaction>;
+
+    // ── Cross-chain bridge placeholder ───────────────────────────────────────
+    fn emit_bridge_placeholder(
         env: Env,
         caller: Address,
         payload: CrossChainBridgePayload,
     );
+
+    // --- Event ticketing system ---
+    #[allow(clippy::too_many_arguments)]
+    fn create_event(
+        env: Env,
+        merchant: Address,
+        name: String,
+        ticket_price: i128,
+        token: Address,
+        capacity: u32,
+        event_date: u64,
+        royalty_bps: u32,
+    ) -> u64;
+    fn purchase_ticket(env: Env, event_id: u64, buyer: Address) -> u64;
+    fn configure_dynamic_pricing(
+        env: Env,
+        merchant: Address,
+        event_id: u64,
+        early_bird_end: u64,
+        early_bird_discount_bps: u32,
+        late_markup_bps: u32,
+    );
+    fn get_current_ticket_price(env: Env, event_id: u64) -> i128;
+    fn cancel_event_and_batch_refund(env: Env, merchant: Address, event_id: u64);
+    fn resell_ticket(
+        env: Env,
+        seller: Address,
+        buyer: Address,
+        ticket_id: u64,
+        resale_price: i128,
+    );
+    fn get_event(env: Env, event_id: u64) -> Event;
+    fn get_ticket(env: Env, ticket_id: u64) -> Ticket;
+    fn get_event_tickets(env: Env, event_id: u64) -> Vec<u64>;
+    fn get_user_tickets(env: Env, user: Address) -> Vec<u64>;
+
+    /// Purchase multiple tickets in a single call.
+    /// Applies automatic group discount in Shade tokens:
+    /// 5–9 tickets → 5%, 10–19 → 10%, 20+ → 15%.
+    fn purchase_tickets_bulk(
+        env: Env,
+        event_id: u64,
+        buyer: Address,
+        quantity: u32,
+        shade_token: Address,
+        merchant_account: Address,
+    );
+
+    // ── Token analytics ────────────────────────────────────────────────────────
+
+    /// Get comprehensive analytics for a specific token
+    fn get_token_analytics(env: Env, token: Address) -> TokenAnalytics;
+
+    /// Get total volume for a specific token
+    fn get_token_volume(env: Env, token: Address) -> i128;
+
+    /// Get token dominance metrics sorted by volume (descending)
+    fn get_token_dominance_metrics(env: Env, tokens: Vec<Address>) -> Vec<(Address, i128)>;
+
+    /// Get top tokens by volume with limit
+    fn get_top_tokens_by_volume(env: Env, limit: u32) -> Vec<(Address, i128)>;
+
+    /// Get market share of a token as basis points (10000 = 100%)
+    fn get_token_market_share(env: Env, token: Address) -> i128;
 }

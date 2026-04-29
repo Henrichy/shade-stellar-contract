@@ -78,6 +78,7 @@ pub fn publish_token_added_event(env: &Env, token: Address, timestamp: u64) {
 #[contractevent]
 pub struct WithdrawalToEvent {
     pub token: Address,
+    pub merchant: Address,
     pub recipient: Address,
     pub amount: i128,
     pub timestamp: u64,
@@ -86,12 +87,14 @@ pub struct WithdrawalToEvent {
 pub fn publish_withdrawal_to_event(
     env: &Env,
     token: Address,
+    merchant: Address,
     recipient: Address,
     amount: i128,
     timestamp: u64
 ) {
     (WithdrawalToEvent {
         token,
+        merchant,
         recipient,
         amount,
         timestamp,

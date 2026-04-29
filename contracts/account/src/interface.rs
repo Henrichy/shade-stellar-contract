@@ -1,5 +1,5 @@
-use crate::types::{ PendingWithdrawal, TokenBalance };
-use soroban_sdk::{ contracttrait, Address, Env, Vec };
+use crate::types::{TokenBalance, WithdrawalAnalytics};
+use soroban_sdk::{contracttrait, Address, Env, Vec};
 
 #[contracttrait]
 pub trait MerchantAccountTrait {
@@ -10,6 +10,7 @@ pub trait MerchantAccountTrait {
     fn has_token(env: Env, token: Address) -> bool;
     fn get_balance(env: Env, token: Address) -> i128;
     fn get_balances(env: Env) -> Vec<TokenBalance>;
+    fn get_withdrawal_analytics(env: Env, token: Address) -> WithdrawalAnalytics;
     fn verify_account(env: Env);
     fn is_verified_account(env: Env) -> bool;
     fn restrict_account(env: Env, status: bool);
@@ -17,8 +18,6 @@ pub trait MerchantAccountTrait {
     fn withdraw_to(env: Env, token: Address, amount: i128, recipient: Address);
     fn set_withdrawal_threshold(env: Env, threshold: i128);
     fn get_withdrawal_threshold(env: Env) -> i128;
-    fn add_co_signer(env: Env, co_signer: Address);
-    fn get_co_signers(env: Env) -> Vec<Address>;
-    fn approve_withdrawal(env: Env, withdrawal_id: u64);
-    fn get_pending_withdrawal(env: Env, withdrawal_id: u64) -> PendingWithdrawal;
+    fn approve_withdrawal(env: Env, request_id: u64);
+    fn get_withdrawal_request(env: Env, request_id: u64) -> crate::types::WithdrawalRequest;
 }

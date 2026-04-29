@@ -2,8 +2,8 @@
 
 use crate::account::MerchantAccount;
 use crate::account::MerchantAccountClient;
-use soroban_sdk::testutils::{ Address as _, Events as _ };
-use soroban_sdk::{ token, Address, Env };
+use soroban_sdk::testutils::{Address as _, Events as _, Ledger as _};
+use soroban_sdk::{token, Address, Env};
 
 fn setup_initialized_account(env: &Env) -> (Address, MerchantAccountClient<'_>, Address) {
     let contract_id = env.register(MerchantAccount, ());
@@ -241,109 +241,51 @@ fn test_withdraw_to_emits_event() {
     assert!(!events.is_empty(), "Withdrawal event should be emitted");
 }
 
-/// Test Case 9: Set Withdrawal Threshold
-/// Manager can set withdrawal threshold.
+/// Test Case 9: Withdrawal Restricted Account
+/// Attempting to withdraw when the account is restricted should panic.
 #[test]
-fn test_set_withdrawal_threshold() {
-    let env = Env::default();
-    env.mock_all_auths();
-
-    let (_contract_id, client, _merchant) = setup_initialized_account(&env);
-
-    client.set_withdrawal_threshold(&1000);
-    assert_eq!(client.get_withdrawal_threshold(), 1000);
-}
-
-/// Test Case 10: Add Co-signer
-/// Manager can add co-signers.
-#[test]
-fn test_add_co_signer() {
-    let env = Env::default();
-    env.mock_all_auths();
-
-    let (_contract_id, client, _merchant) = setup_initialized_account(&env);
-    let co_signer = Address::generate(&env);
-
-    client.add_co_signer(&co_signer);
-
-    let co_signers = client.get_co_signers();
-    assert_eq!(co_signers.len(), 1);
-    assert_eq!(co_signers.get(0).unwrap(), co_signer);
-}
-
-/// Test Case 11: Large Withdrawal Creates Pending
-/// Withdrawals above threshold with co-signers create pending withdrawals.
-#[test]
-fn test_large_withdrawal_creates_pending() {
+#[should_panic(expected = "HostError: Error(Contract, #5)")]
+fn test_withdraw_to_restricted_account_panics() {
     let env = Env::default();
     env.mock_all_auths();
 
     let (_contract_id, client, _merchant) = setup_initialized_account(&env);
     let token = create_test_token(&env);
     let recipient = Address::generate(&env);
-    let co_signer = Address::generate(&env);
-
-    client.set_withdrawal_threshold(&1000);
-    client.add_co_signer(&co_signer);
 
     let token_client = token::StellarAssetClient::new(&env, &token);
     let contract_address = _contract_id.clone();
     token_client.mint(&contract_address, &5000);
 
-    client.withdraw_to(&token, &2000, &recipient);
+    client.restrict_account(&true);
 
-    let pending = client.get_pending_withdrawal(&0);
-    assert_eq!(pending.amount, 2000);
-    assert_eq!(pending.recipient, recipient);
+    client.withdraw_to(&token, &1000, &recipient);
 }
 
-/// Test Case 12: Approve Pending Withdrawal
-/// Co-signers can approve pending withdrawals.
+/// Test Case 10: Withdrawal Analytics Aggregation
+/// Verify that withdrawal counts and amounts are tracked per token.
 #[test]
-fn test_approve_pending_withdrawal() {
+fn test_withdraw_to_tracks_analytics() {
     let env = Env::default();
     env.mock_all_auths();
+    env.ledger().set_timestamp(1_000_000);
 
     let (_contract_id, client, _merchant) = setup_initialized_account(&env);
     let token = create_test_token(&env);
-    let recipient = Address::generate(&env);
-    let co_signer = Address::generate(&env);
-
-    client.set_withdrawal_threshold(&1000);
-    client.add_co_signer(&co_signer);
 
     let token_client = token::StellarAssetClient::new(&env, &token);
     let contract_address = _contract_id.clone();
-    token_client.mint(&contract_address, &5000);
+    token_client.mint(&contract_address, &10000);
 
-    client.withdraw_to(&token, &2000, &recipient);
-    client.approve_withdrawal(&0);
+    let recipient1 = Address::generate(&env);
+    let recipient2 = Address::generate(&env);
 
-    let recipient_balance = token_client.balance(&recipient);
-    assert_eq!(recipient_balance, 2000);
-}
+    client.withdraw_to(&token, &2500, &recipient1);
+    client.withdraw_to(&token, &1500, &recipient2);
 
-/// Test Case 13: Small Withdrawal Executes Immediately
-/// Withdrawals below threshold execute immediately.
-#[test]
-fn test_small_withdrawal_executes_immediately() {
-    let env = Env::default();
-    env.mock_all_auths();
-
-    let (_contract_id, client, _merchant) = setup_initialized_account(&env);
-    let token = create_test_token(&env);
-    let recipient = Address::generate(&env);
-    let co_signer = Address::generate(&env);
-
-    client.set_withdrawal_threshold(&1000);
-    client.add_co_signer(&co_signer);
-
-    let token_client = token::StellarAssetClient::new(&env, &token);
-    let contract_address = _contract_id.clone();
-    token_client.mint(&contract_address, &5000);
-
-    client.withdraw_to(&token, &500, &recipient);
-
-    let recipient_balance = token_client.balance(&recipient);
-    assert_eq!(recipient_balance, 500);
+    let analytics = client.get_withdrawal_analytics(&token);
+    assert_eq!(analytics.token, token);
+    assert_eq!(analytics.total_withdrawn, 4000);
+    assert_eq!(analytics.withdrawal_count, 2);
+    assert_eq!(analytics.last_withdrawn_at, 1_000_000);
 }

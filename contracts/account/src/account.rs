@@ -11,8 +11,10 @@ use crate::events::{
     publish_withdrawal_to_event,
 };
 use crate::interface::MerchantAccountTrait;
-use crate::types::{ AccountInfo, DataKey, PendingWithdrawal, TokenBalance };
-use soroban_sdk::{ contract, contractimpl, panic_with_error, token, Address, Env, Vec };
+use crate::types::{
+    AccountInfo, DataKey, TokenBalance, WithdrawalAnalytics, WithdrawalRequest, WithdrawalStatus,
+};
+use soroban_sdk::{contract, contractimpl, panic_with_error, token, Address, Env, Vec};
 
 #[contract]
 pub struct MerchantAccount;
@@ -44,36 +46,16 @@ fn token_exists(tracked_tokens: &Vec<Address>, token: &Address) -> bool {
     false
 }
 
-fn get_withdrawal_threshold(env: &Env) -> i128 {
-    env.storage().persistent().get(&DataKey::WithdrawalThreshold).unwrap_or(0)
-}
-
-fn get_co_signers(env: &Env) -> Vec<Address> {
+fn load_withdrawal_analytics(env: &Env, token: &Address) -> WithdrawalAnalytics {
     env.storage()
         .persistent()
-        .get(&DataKey::CoSigners)
-        .unwrap_or_else(|| Vec::new(env))
-}
-
-fn is_co_signer(env: &Env, address: &Address) -> bool {
-    let co_signers = get_co_signers(env);
-    for co_signer in co_signers.iter() {
-        if co_signer == *address {
-            return true;
-        }
-    }
-    false
-}
-
-fn get_next_withdrawal_id(env: &Env) -> u64 {
-    env.storage().persistent().get(&DataKey::PendingWithdrawalCounter).unwrap_or(0)
-}
-
-fn increment_withdrawal_id(env: &Env) {
-    let current_id = get_next_withdrawal_id(env);
-    env.storage()
-        .persistent()
-        .set(&DataKey::PendingWithdrawalCounter, &(current_id + 1));
+        .get(&DataKey::WithdrawalAnalytics(token.clone()))
+        .unwrap_or(WithdrawalAnalytics {
+            token: token.clone(),
+            total_withdrawn: 0,
+            withdrawal_count: 0,
+            last_withdrawn_at: 0,
+        })
 }
 
 #[contractimpl]
@@ -160,6 +142,10 @@ impl MerchantAccountTrait for MerchantAccount {
         balances
     }
 
+    fn get_withdrawal_analytics(env: Env, token: Address) -> WithdrawalAnalytics {
+        load_withdrawal_analytics(&env, &token)
+    }
+
     fn verify_account(env: Env) {
         let manager = get_manager(&env);
         manager.require_auth();
@@ -185,49 +171,131 @@ impl MerchantAccountTrait for MerchantAccount {
     }
 
     fn withdraw_to(env: Env, token: Address, amount: i128, recipient: Address) {
-        let manager = get_manager(&env);
-        manager.require_auth();
+        let merchant = Self::get_merchant(env.clone());
+        merchant.require_auth();
 
-        let threshold = get_withdrawal_threshold(&env);
-        let co_signers = get_co_signers(&env);
+        if is_restricted_account(&env) {
+            panic_with_error!(&env, ContractError::AccountRestricted);
+        }
 
-        if amount >= threshold && !co_signers.is_empty() {
-            let withdrawal_id = get_next_withdrawal_id(&env);
-            let pending_withdrawal = PendingWithdrawal {
-                id: withdrawal_id,
+        let threshold = Self::get_withdrawal_threshold(env.clone());
+        if threshold > 0 && amount > threshold {
+            let id = env
+                .storage()
+                .persistent()
+                .get(&DataKey::WithdrawalCount)
+                .unwrap_or(0u64)
+                + 1;
+
+            let mut approvals = Vec::new(&env);
+            approvals.push_back(merchant.clone());
+
+            let request = WithdrawalRequest {
+                id,
                 token: token.clone(),
                 amount,
                 recipient: recipient.clone(),
-                initiator: manager.clone(),
-                approvals: Vec::new(&env),
-                timestamp: env.ledger().timestamp(),
+                approvals,
+                status: WithdrawalStatus::Pending,
             };
+
             env.storage()
                 .persistent()
-                .set(&DataKey::PendingWithdrawals(withdrawal_id), &pending_withdrawal);
-            increment_withdrawal_id(&env);
-            publish_pending_withdrawal_created_event(
-                &env,
-                withdrawal_id,
-                token,
-                amount,
-                recipient,
-                manager,
-                env.ledger().timestamp()
-            );
+                .set(&DataKey::WithdrawalRequest(id), &request);
+            env.storage().persistent().set(&DataKey::WithdrawalCount, &id);
             return;
         }
 
-        let token_client = token::TokenClient::new(&env, &token);
+        Self::execute_withdrawal(&env, &token, amount, &recipient);
+    }
+
+    fn set_withdrawal_threshold(env: Env, threshold: i128) {
+        let manager = get_manager(&env);
+        manager.require_auth();
+        env.storage().persistent().set(&DataKey::Threshold, &threshold);
+    }
+
+    fn get_withdrawal_threshold(env: Env) -> i128 {
+        env.storage().persistent().get(&DataKey::Threshold).unwrap_or(0)
+    }
+
+    fn approve_withdrawal(env: Env, request_id: u64) {
+        let manager = get_manager(&env);
+        manager.require_auth();
+
+        let mut request: WithdrawalRequest = env
+            .storage()
+            .persistent()
+            .get(&DataKey::WithdrawalRequest(request_id))
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::InvoiceNotFound));
+
+        if request.status != WithdrawalStatus::Pending {
+            panic_with_error!(&env, ContractError::InvalidInvoiceStatus);
+        }
+
+        // Add manager approval
+        let mut already_approved = false;
+        for app in request.approvals.iter() {
+            if app == manager {
+                already_approved = true;
+                break;
+            }
+        }
+
+        if !already_approved {
+            request.approvals.push_back(manager.clone());
+        }
+
+        // If we have 2 approvals (merchant initiated + manager approved), execute
+        if request.approvals.len() >= 2 {
+            request.status = WithdrawalStatus::Executed;
+            Self::execute_withdrawal_internal(&env, &request.token, request.amount, &request.recipient);
+        }
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::WithdrawalRequest(request_id), &request);
+    }
+
+    fn get_withdrawal_request(env: Env, request_id: u64) -> WithdrawalRequest {
+        env.storage()
+            .persistent()
+            .get(&DataKey::WithdrawalRequest(request_id))
+            .unwrap()
+    }
+}
+
+impl MerchantAccount {
+    fn execute_withdrawal(env: &Env, token: &Address, amount: i128, recipient: &Address) {
+        Self::execute_withdrawal_internal(env, token, amount, recipient);
+    }
+
+    fn execute_withdrawal_internal(env: &Env, token: &Address, amount: i128, recipient: &Address) {
+        let token_client = token::TokenClient::new(env, token);
         let current_balance = token_client.balance(&env.current_contract_address());
 
         if amount > current_balance {
-            panic_with_error!(&env, ContractError::InsufficientBalance);
+            panic_with_error!(env, ContractError::InsufficientBalance);
         }
 
-        token_client.transfer(&env.current_contract_address(), &recipient, &amount);
+        token_client.transfer(&env.current_contract_address(), recipient, &amount);
 
-        publish_withdrawal_to_event(&env, token, recipient, amount, env.ledger().timestamp());
+        let mut analytics = load_withdrawal_analytics(env, token);
+        analytics.total_withdrawn += amount;
+        analytics.withdrawal_count += 1;
+        analytics.last_withdrawn_at = env.ledger().timestamp();
+        env.storage()
+            .persistent()
+            .set(&DataKey::WithdrawalAnalytics(token.clone()), &analytics);
+
+        publish_withdrawal_to_event(
+            env,
+            token.clone(),
+            Self::get_merchant(env.clone()),
+            recipient.clone(),
+            amount,
+            env.ledger().timestamp(),
+        );
     }
 
     fn set_withdrawal_threshold(env: Env, threshold: i128) {
