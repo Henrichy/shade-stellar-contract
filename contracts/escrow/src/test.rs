@@ -23,6 +23,88 @@ fn calculate_fee(amount: i128, fee_bps: u32) -> i128 {
 #[test]
 fn test_escrow_initialization() {
     let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(1000);
+
+    let (client, buyer, seller, arbiter, _token) = setup_escrow(&env, 2000);
+
+    assert_eq!(client.buyer(), buyer);
+    assert_eq!(client.seller(), seller);
+    assert_eq!(client.arbiter(), arbiter);
+    assert_eq!(client.terms(), String::from_str(&env, "Deliver goods by deadline"));
+    assert_eq!(client.expires_at(), 2000);
+    assert!(!client.is_refunded());
+}
+
+#[test]
+fn claim_refund_succeeds_after_expiry() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(1000);
+
+    let (client, buyer, _seller, _arbiter, token_address) = setup_escrow(&env, 2000);
+
+    // Advance time past expiry
+    env.ledger().set_timestamp(3000);
+
+    client.claim_refund(&buyer);
+
+    assert!(client.is_refunded());
+
+    // Verify buyer received the funds
+    let token_client = TokenClient::new(&env, &token_address);
+    assert_eq!(token_client.balance(&buyer), 1000);
+}
+
+#[test]
+#[should_panic(expected = "escrow has not expired yet")]
+fn claim_refund_fails_before_expiry() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(1000);
+
+    let (client, buyer, _seller, _arbiter, _token) = setup_escrow(&env, 2000);
+
+    // Still before expiry
+    env.ledger().set_timestamp(1500);
+    client.claim_refund(&buyer);
+}
+
+#[test]
+#[should_panic(expected = "only the buyer can claim a refund")]
+fn claim_refund_fails_for_non_buyer() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(1000);
+
+    let (client, _buyer, seller, _arbiter, _token) = setup_escrow(&env, 2000);
+
+    env.ledger().set_timestamp(3000);
+    client.claim_refund(&seller);
+}
+
+#[test]
+#[should_panic(expected = "refund already claimed")]
+fn claim_refund_fails_if_already_refunded() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(1000);
+
+    let (client, buyer, _seller, _arbiter, _token) = setup_escrow(&env, 2000);
+
+    env.ledger().set_timestamp(3000);
+    client.claim_refund(&buyer);
+    // Second claim should panic
+    client.claim_refund(&buyer);
+}
+
+#[test]
+#[should_panic(expected = "expires_at must be in the future")]
+fn init_fails_with_past_expiry() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(5000);
+
     let contract_id = env.register(EscrowContract, ());
     let client = EscrowContractClient::new(&env, &contract_id);
 

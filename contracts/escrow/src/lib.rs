@@ -269,6 +269,14 @@ impl EscrowContract {
             }
         }
 
+        if expires_at <= env.ledger().timestamp() {
+            panic!("expires_at must be in the future");
+        }
+
+        if amount <= 0 {
+            panic!("amount must be positive");
+        }
+
         env.storage().instance().set(&DataKey::Buyer, &buyer);
         env.storage().instance().set(&DataKey::Seller, &seller);
         env.storage().instance().set(&DataKey::Arbiter, &arbiter);
