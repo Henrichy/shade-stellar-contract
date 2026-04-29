@@ -473,6 +473,25 @@ impl ShadeTrait for Shade {
         crate::components::event::get_event(&env, &event_id)
     }
 
+    fn purchase_tickets_bulk(
+        env: Env,
+        event_id: u64,
+        buyer: Address,
+        quantity: u32,
+        shade_token: Address,
+        merchant_account: Address,
+    ) {
+        pausable_component::assert_not_paused(&env);
+        crate::components::event::purchase_tickets_bulk(
+            &env,
+            &event_id,
+            &buyer,
+            quantity,
+            &shade_token,
+            &merchant_account,
+        );
+    }
+
     fn get_token_analytics(env: Env, token: Address) -> TokenAnalytics {
         admin_component::get_token_analytics(&env, &token)
     }

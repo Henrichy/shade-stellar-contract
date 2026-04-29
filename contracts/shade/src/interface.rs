@@ -183,6 +183,18 @@ pub trait ShadeTrait {
     fn purchase_ticket(env: Env, event_id: u64, buyer: Address);
     fn get_event(env: Env, event_id: u64) -> Event;
 
+    /// Purchase multiple tickets in a single call.
+    /// Applies automatic group discount in Shade tokens:
+    /// 5–9 tickets → 5%, 10–19 → 10%, 20+ → 15%.
+    fn purchase_tickets_bulk(
+        env: Env,
+        event_id: u64,
+        buyer: Address,
+        quantity: u32,
+        shade_token: Address,
+        merchant_account: Address,
+    );
+
     // ── Token analytics ────────────────────────────────────────────────────────
 
     /// Get comprehensive analytics for a specific token
