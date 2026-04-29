@@ -23,7 +23,6 @@ fn test_full_ticket_lifecycle() {
 
     let organizer = Address::generate(&env);
     let holder = Address::generate(&env);
-    let operator = Address::generate(&env);
 
     // 1. Create event
     let event_id = client.create_event(
@@ -51,7 +50,7 @@ fn test_full_ticket_lifecycle() {
     assert_eq!(v.event_id, event_id);
 
     // 4. Check in
-    client.check_in(&operator, &ticket_id);
+    client.check_in(&organizer, &ticket_id);
 
     let ticket = client.get_ticket(&ticket_id);
     assert!(ticket.checked_in);
@@ -66,7 +65,7 @@ fn test_full_ticket_lifecycle() {
     let record = client.get_check_in_record(&ticket_id);
     assert!(record.is_some());
     let rec = record.unwrap();
-    assert_eq!(rec.checked_in_by, operator);
+    assert_eq!(rec.checked_in_by, organizer);
     assert_eq!(rec.ticket_id, ticket_id);
 }
 
@@ -124,8 +123,7 @@ fn test_data_integrity_multiple_events() {
     assert_eq!(client.get_ticket(&ticket_b1).event_id, event_b);
 
     // Check-in counts are independent
-    let operator = Address::generate(&env);
-    client.check_in(&operator, &ticket_a1);
+    client.check_in(&organizer_a, &ticket_a1);
     assert_eq!(client.get_event_checked_in_count(&event_a), 1);
     assert_eq!(client.get_event_checked_in_count(&event_b), 0);
 }
@@ -293,7 +291,6 @@ fn test_capacity_enforced_until_full() {
     let client = TicketingContractClient::new(&env, &contract_id);
 
     let organizer = Address::generate(&env);
-    let operator = Address::generate(&env);
     let holder = Address::generate(&env);
 
     let event_id = client.create_event(
@@ -310,9 +307,9 @@ fn test_capacity_enforced_until_full() {
     let t3 = client.issue_ticket(&organizer, &event_id, &holder, &make_qr(&env, 3));
 
     // All three tickets check in successfully.
-    client.check_in(&operator, &t1);
-    client.check_in(&operator, &t2);
-    client.check_in(&operator, &t3);
+    client.check_in(&organizer, &t1);
+    client.check_in(&organizer, &t2);
+    client.check_in(&organizer, &t3);
 
     assert_eq!(client.get_event_checked_in_count(&event_id), 3);
     assert_eq!(client.get_event_ticket_count(&event_id), 3);
