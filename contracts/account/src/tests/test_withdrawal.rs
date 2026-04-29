@@ -19,8 +19,7 @@ fn setup_initialized_account(env: &Env) -> (Address, MerchantAccountClient<'_>, 
 
 fn create_test_token(env: &Env) -> Address {
     let token_admin = Address::generate(env);
-    env.register_stellar_asset_contract_v2(token_admin)
-        .address()
+    env.register_stellar_asset_contract_v2(token_admin).address()
 }
 
 /// Test Case 1: Successful Withdrawal
@@ -48,17 +47,11 @@ fn test_withdraw_to_success_with_balance() {
 
     // Verify balance after withdrawal
     let balance_after = client.get_balance(&token);
-    assert_eq!(
-        balance_after, 2000,
-        "Balance after withdrawal should be 2000"
-    );
+    assert_eq!(balance_after, 2000, "Balance after withdrawal should be 2000");
 
     // Verify recipient received funds
     let recipient_balance = token_client.balance(&recipient);
-    assert_eq!(
-        recipient_balance, 3000,
-        "Recipient should have received 3000"
-    );
+    assert_eq!(recipient_balance, 3000, "Recipient should have received 3000");
 }
 
 /// Test Case 2: Requires Merchant Authentication
@@ -123,17 +116,11 @@ fn test_withdraw_to_exact_balance() {
 
     // Verify balance is now zero
     let balance_after = client.get_balance(&token);
-    assert_eq!(
-        balance_after, 0,
-        "Balance after exact withdrawal should be 0"
-    );
+    assert_eq!(balance_after, 0, "Balance after exact withdrawal should be 0");
 
     // Verify recipient received all funds
     let recipient_balance = token_client.balance(&recipient);
-    assert_eq!(
-        recipient_balance, 1000,
-        "Recipient should have received 1000"
-    );
+    assert_eq!(recipient_balance, 1000, "Recipient should have received 1000");
 }
 
 /// Test Case 5: Multiple Withdrawals
@@ -195,17 +182,11 @@ fn test_withdraw_to_zero_amount() {
 
     // Verify balance unchanged
     let balance = client.get_balance(&token);
-    assert_eq!(
-        balance, 5000,
-        "Balance should remain unchanged after zero withdrawal"
-    );
+    assert_eq!(balance, 5000, "Balance should remain unchanged after zero withdrawal");
 
     // Verify recipient received nothing
     let recipient_balance = token_client.balance(&recipient);
-    assert_eq!(
-        recipient_balance, 0,
-        "Recipient should have received nothing"
-    );
+    assert_eq!(recipient_balance, 0, "Recipient should have received nothing");
 }
 
 /// Test Case 7: Withdrawal to Same Address

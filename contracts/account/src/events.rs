@@ -1,4 +1,4 @@
-use soroban_sdk::{contractevent, Address, Env};
+use soroban_sdk::{ contractevent, Address, Env };
 
 #[contractevent]
 pub struct AccountInitializedEvent {
@@ -11,14 +11,13 @@ pub fn publish_account_initialized_event(
     env: &Env,
     merchant: Address,
     merchant_id: u64,
-    timestamp: u64,
+    timestamp: u64
 ) {
-    AccountInitializedEvent {
+    (AccountInitializedEvent {
         merchant,
         merchant_id,
         timestamp,
-    }
-    .publish(env);
+    }).publish(env);
 }
 
 #[contractevent(topics = ["account_restricted"])]
@@ -28,7 +27,7 @@ pub struct AccountRestrictedEvent {
 }
 
 pub fn publish_account_restricted_event(env: &Env, status: bool, timestamp: u64) {
-    AccountRestrictedEvent { status, timestamp }.publish(env);
+    (AccountRestrictedEvent { status, timestamp }).publish(env);
 }
 
 #[contractevent(data_format = "single-value")]
@@ -40,7 +39,7 @@ pub struct AccountVerifiedEvent {
 pub type AccountVerified = AccountVerifiedEvent;
 
 pub fn publish_account_verified_event(env: &Env, timestamp: u64) {
-    AccountVerifiedEvent { timestamp }.publish(env);
+    (AccountVerifiedEvent { timestamp }).publish(env);
 }
 
 #[contractevent]
@@ -56,15 +55,14 @@ pub fn publish_refund_processed_event(
     token: Address,
     amount: i128,
     to: Address,
-    timestamp: u64,
+    timestamp: u64
 ) {
-    RefundProcessedEvent {
+    (RefundProcessedEvent {
         token,
         amount,
         recipient: to,
         timestamp,
-    }
-    .publish(env);
+    }).publish(env);
 }
 
 #[contractevent]
@@ -74,7 +72,7 @@ pub struct TokenAddedEvent {
 }
 
 pub fn publish_token_added_event(env: &Env, token: Address, timestamp: u64) {
-    TokenAddedEvent { token, timestamp }.publish(env);
+    (TokenAddedEvent { token, timestamp }).publish(env);
 }
 
 #[contractevent]
@@ -92,14 +90,67 @@ pub fn publish_withdrawal_to_event(
     merchant: Address,
     recipient: Address,
     amount: i128,
-    timestamp: u64,
+    timestamp: u64
 ) {
-    WithdrawalToEvent {
+    (WithdrawalToEvent {
         token,
         merchant,
         recipient,
         amount,
         timestamp,
-    }
-    .publish(env);
+    }).publish(env);
+}
+
+#[contractevent]
+pub struct PendingWithdrawalCreatedEvent {
+    pub id: u64,
+    pub token: Address,
+    pub amount: i128,
+    pub recipient: Address,
+    pub initiator: Address,
+    pub timestamp: u64,
+}
+
+pub fn publish_pending_withdrawal_created_event(
+    env: &Env,
+    id: u64,
+    token: Address,
+    amount: i128,
+    recipient: Address,
+    initiator: Address,
+    timestamp: u64
+) {
+    (PendingWithdrawalCreatedEvent {
+        id,
+        token,
+        amount,
+        recipient,
+        initiator,
+        timestamp,
+    }).publish(env);
+}
+
+#[contractevent]
+pub struct WithdrawalApprovedEvent {
+    pub id: u64,
+    pub approver: Address,
+    pub timestamp: u64,
+}
+
+pub fn publish_withdrawal_approved_event(env: &Env, id: u64, approver: Address, timestamp: u64) {
+    (WithdrawalApprovedEvent {
+        id,
+        approver,
+        timestamp,
+    }).publish(env);
+}
+
+#[contractevent]
+pub struct WithdrawalExecutedEvent {
+    pub id: u64,
+    pub timestamp: u64,
+}
+
+pub fn publish_withdrawal_executed_event(env: &Env, id: u64, timestamp: u64) {
+    (WithdrawalExecutedEvent { id, timestamp }).publish(env);
 }
