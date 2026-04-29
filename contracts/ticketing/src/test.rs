@@ -158,7 +158,6 @@ fn test_check_in_valid_and_duplicate() {
     let client = TicketingContractClient::new(&env, &contract_id);
 
     let organizer = Address::generate(&env);
-    let operator = Address::generate(&env);
     let holder = Address::generate(&env);
 
     let event_id = client.create_event(
@@ -174,7 +173,7 @@ fn test_check_in_valid_and_duplicate() {
     let ticket_id = client.issue_ticket(&organizer, event_id, &holder, qr_hash);
 
     // First check-in should succeed
-    client.check_in(&operator, ticket_id);
+    client.check_in(&organizer, ticket_id);
 
     let ticket = client.get_ticket(ticket_id);
     assert!(ticket.checked_in);
@@ -182,7 +181,7 @@ fn test_check_in_valid_and_duplicate() {
 
     // Duplicate check-in should fail
     let result = std::panic::catch_unwind(|| {
-        client.check_in(&operator, ticket_id);
+        client.check_in(&organizer, ticket_id);
     });
     assert!(result.is_err());
 
@@ -191,7 +190,7 @@ fn test_check_in_valid_and_duplicate() {
     assert!(check_in_record.is_some);
     let record = check_in_record.unwrap;
     assert_eq!(record.ticket_id, ticket_id);
-    assert_eq!(record.checked_in_by, operator);
+    assert_eq!(record.checked_in_by, organizer);
 }
 
 #[test]
@@ -217,13 +216,16 @@ fn test_check_in_with_wrong_operator() {
     let qr_hash = test_qr_hash(&env, 10);
     let ticket_id = client.issue_ticket(&organizer, event_id, &holder, qr_hash);
 
-    // Only authorized operator can check in
+    // Only the event organizer can check in
     env.with_auth(&operator1, || {
         let result = std::panic::catch_unwind(|| {
             client.check_in(&operator1, ticket_id);
         });
-        assert!(result.is_err()); // should fail because operator not authorized
+        assert!(result.is_err()); // should fail because caller is not organizer
     });
+
+    // Organizer check-in succeeds.
+    client.check_in(&organizer, ticket_id);
 }
 
 #[test]
@@ -256,8 +258,7 @@ fn test_ticket_transfer() {
     assert_eq!(ticket.holder, holder2);
 
     // Transfer already checked-in ticket should fail
-    let operator = Address::generate(&env);
-    client.check_in(&operator, ticket_id);
+    client.check_in(&organizer, ticket_id);
 
     let result = std::panic::catch_unwind(|| {
         client.transfer_ticket(&holder2, ticket_id, &holder1);
@@ -377,7 +378,6 @@ fn test_check_in_counters() {
     let client = TicketingContractClient::new(&env, &contract_id);
 
     let organizer = Address::generate(&env);
-    let operator = Address::generate(&env);
     let holder1 = Address::generate(&env);
     let holder2 = Address::generate(&env);
 
@@ -399,10 +399,10 @@ fn test_check_in_counters() {
     assert_eq!(client.get_event_ticket_count(event_id), 2);
     assert_eq!(client.get_event_checked_in_count(event_id), 0);
 
-    client.check_in(&operator, ticket_id1);
+    client.check_in(&organizer, ticket_id1);
     assert_eq!(client.get_event_checked_in_count(event_id), 1);
 
-    client.check_in(&operator, ticket_id2);
+    client.check_in(&organizer, ticket_id2);
     assert_eq!(client.get_event_checked_in_count(event_id), 2);
 }
 
@@ -458,7 +458,6 @@ fn test_verify_after_check_in() {
     let client = TicketingContractClient::new(&env, &contract_id);
 
     let organizer = Address::generate(&env);
-    let operator = Address::generate(&env);
     let holder = Address::generate(&env);
 
     let event_id = client.create_event(
@@ -479,7 +478,7 @@ fn test_verify_after_check_in() {
     assert!(!v1.already_checked_in);
 
     // Check in
-    client.check_in(&operator, ticket_id);
+    client.check_in(&organizer, ticket_id);
 
     // Verify after check-in
     let v2 = client.verify_ticket(ticket_id, qr_hash);

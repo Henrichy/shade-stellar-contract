@@ -1,15 +1,31 @@
 #![no_std]
-use soroban_sdk::{contract, contractevent, contractimpl, contracttype, token, Address, Env, String};
 
 mod errors;
 
+#[cfg(test)]
+mod test;
+
 use crate::errors::EscrowError;
-use soroban_sdk::{contract, contractevent, contractimpl, contracttype, panic_with_error, token, Address, Env, String};
+use soroban_sdk::{
+    contract, contractevent, contractimpl, contracttype, panic_with_error, token, Address, Env,
+    String, Vec,
+};
 
-const MAX_FEE_BPS: u32 = 10_000; // 100%
+const MAX_FEE_BPS: u32 = 10_000;
 
-#[contract]
-pub struct EscrowContract;
+// ── Storage keys ───────────────────────────────────────────────────────────────
+
+#[derive(Clone)]
+#[contracttype]
+pub struct EscrowConfig {
+    pub buyer: Address,
+    pub seller: Address,
+    pub arbiter: Address,
+    pub terms: String,
+    pub token: Address,
+    pub amount: i128,
+    pub expiry: u64,
+}
 
 #[derive(Clone)]
 #[contracttype]
@@ -19,17 +35,16 @@ enum DataKey {
     Arbiter,
     Terms,
     Token,
-    Amount,
-    Status,
-    Deadline,
     TotalAmount,
-    Status,
+    EscrowStatus,
+    Deadline,
     PlatformAccount,
     FeePercentageBps,
     TotalReleased,
     Milestones,
-    ReleasedMilestones,
 }
+
+// ── Types ──────────────────────────────────────────────────────────────────────
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -41,19 +56,18 @@ pub struct Milestone {
 }
 
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[repr(u32)]
 pub enum EscrowStatus {
-    Pending,
-    Completed,
-    Disputed,
-    Resolved,
-    Expired,
     Pending = 0,
     Completed = 1,
     Disputed = 2,
     Resolved = 3,
     PartiallyReleased = 4,
+    Expired = 5,
 }
+
+// ── Events ─────────────────────────────────────────────────────────────────────
 
 #[contractevent]
 pub struct EscrowInitializedEvent {
@@ -113,6 +127,9 @@ pub struct EscrowDisputeResolvedEvent {
     pub timestamp: u64,
 }
 
+// Emitted on every fee deduction — satisfies #240 (Shade fee engine integration).
+// Off-chain indexers (and the Shade fee engine) subscribe to this event to keep
+// their fee ledgers consistent with the escrow contract.
 #[contractevent]
 pub struct FeeDeductedEvent {
     pub fee_amount: i128,
@@ -126,12 +143,14 @@ pub struct FeeDeductedEvent {
 fn _get_status(env: &Env) -> EscrowStatus {
     env.storage()
         .instance()
-        .get(&DataKey::Status)
+        .get(&DataKey::EscrowStatus)
         .unwrap_or_else(|| panic_with_error!(env, EscrowError::NotInitialized))
 }
 
 fn _set_status(env: &Env, status: EscrowStatus) {
-    env.storage().instance().set(&DataKey::Status, &status);
+    env.storage()
+        .instance()
+        .set(&DataKey::EscrowStatus, &status);
 }
 
 fn _get_total_amount(env: &Env) -> i128 {
@@ -148,24 +167,11 @@ fn _get_token(env: &Env) -> Address {
         .unwrap_or_else(|| panic_with_error!(env, EscrowError::NotInitialized))
 }
 
-fn _calculate_fee(amount: i128, fee_bps: u32) -> i128 {
-    if fee_bps == 0 {
-        return 0;
-    }
-    let fee = (amount * fee_bps as i128) / 10_000;
-    if fee > amount {
-        return amount;
-    }
-    fee
-}
-
-fn _get_remaining_balance(env: &Env) -> i128 {
-    let total = _get_total_amount(&env);
-    let released: i128 = env.storage()
+fn _get_seller(env: &Env) -> Address {
+    env.storage()
         .instance()
-        .get(&DataKey::TotalReleased)
-        .unwrap_or(0);
-    total - released
+        .get(&DataKey::Seller)
+        .unwrap_or_else(|| panic_with_error!(env, EscrowError::NotInitialized))
 }
 
 fn _get_platform_account(env: &Env) -> Address {
@@ -182,51 +188,69 @@ fn _get_fee_percentage(env: &Env) -> u32 {
         .unwrap_or(0)
 }
 
+fn _get_total_released(env: &Env) -> i128 {
+    env.storage()
+        .instance()
+        .get(&DataKey::TotalReleased)
+        .unwrap_or(0)
+}
+
+fn _get_remaining_balance(env: &Env) -> i128 {
+    _get_total_amount(env) - _get_total_released(env)
+}
+
 fn _get_milestones(env: &Env) -> Vec<Milestone> {
     env.storage()
         .instance()
         .get(&DataKey::Milestones)
-        .unwrap_or_else(|| Vec::new(&env))
+        .unwrap_or_else(|| Vec::new(env))
 }
 
 fn _set_milestones(env: &Env, milestones: Vec<Milestone>) {
-    env.storage().instance().set(&DataKey::Milestones, &milestones);
-}
-
-fn _get_released_milestones(env: &Env) -> Vec<bool> {
     env.storage()
         .instance()
-        .get(&DataKey::ReleasedMilestones)
-        .unwrap_or_else(|| Vec::new(&env))
+        .set(&DataKey::Milestones, &milestones);
 }
 
-fn _set_released_milestones(env: &Env, released: Vec<bool>) {
-    env.storage().instance().set(&DataKey::ReleasedMilestones, &released);
-}
-
-fn _mark_milestone_released(env: &Env, milestone_id: u32) {
-    let mut released = _get_released_milestones(&env);
-    let milestone_index = milestone_id as usize;
-    while released.len() <= milestone_index {
-        released.push_back(false);
+pub fn _calculate_fee(amount: i128, fee_bps: u32) -> i128 {
+    if fee_bps == 0 {
+        return 0;
     }
-    *released.get_mut(milestone_index).unwrap() = true;
-    _set_released_milestones(&env, released);
+    let fee = (amount * fee_bps as i128) / 10_000;
+    fee.min(amount)
 }
 
 fn _calculate_milestone_amount(total: i128, percentage_bps: u32) -> i128 {
     (total * percentage_bps as i128) / 10_000
 }
 
-fn _get_seller(env: &Env) -> Address {
-    env.storage()
-        .instance()
-        .get(&DataKey::Seller)
-        .unwrap_or_else(|| panic!("seller not set"))
+// Mark a specific milestone as released by rebuilding the Vec. Soroban's Vec
+// is copy-on-write; there is no in-place mutation via get_mut.
+fn _mark_milestone_released(env: &Env, milestone_id: u32) {
+    let milestones = _get_milestones(env);
+    let mut updated: Vec<Milestone> = Vec::new(env);
+    for m in milestones.iter() {
+        if m.id == milestone_id {
+            updated.push_back(Milestone {
+                released: true,
+                ..m
+            });
+        } else {
+            updated.push_back(m);
+        }
+    }
+    _set_milestones(env, updated);
 }
+
+// ── Contract ───────────────────────────────────────────────────────────────────
+
+#[contract]
+pub struct EscrowContract;
 
 #[contractimpl]
 impl EscrowContract {
+    /// Initialise the escrow. Milestones must sum to exactly 10_000 bps when
+    /// more than one is provided; a single milestone is treated as 100%. (#237)
     pub fn init(
         env: Env,
         buyer: Address,
@@ -241,37 +265,47 @@ impl EscrowContract {
         if env.storage().instance().has(&DataKey::Buyer) {
             panic_with_error!(env, EscrowError::AlreadyInitialized);
         }
-
         if total_amount <= 0 {
             panic_with_error!(env, EscrowError::InvalidAmount);
         }
-
         if fee_percentage_bps > MAX_FEE_BPS {
             panic_with_error!(env, EscrowError::InvalidFeePercentage);
         }
-
         if milestones.len() > 1 {
             let mut total_bps: u32 = 0;
-            for milestone in milestones.iter() {
-                total_bps += milestone.percentage_bps;
+            for m in milestones.iter() {
+                total_bps += m.percentage_bps;
             }
             if total_bps != 10_000 {
                 panic_with_error!(env, EscrowError::MilestoneSumMismatch);
             }
         }
 
+        if expires_at <= env.ledger().timestamp() {
+            panic!("expires_at must be in the future");
+        }
+
+        if amount <= 0 {
+            panic!("amount must be positive");
+        }
         env.storage().instance().set(&DataKey::Buyer, &buyer);
         env.storage().instance().set(&DataKey::Seller, &seller);
         env.storage().instance().set(&DataKey::Arbiter, &arbiter);
         env.storage().instance().set(&DataKey::Terms, &terms);
         env.storage().instance().set(&DataKey::Token, &token);
-        env.storage().instance().set(&DataKey::TotalAmount, &total_amount);
-        env.storage().instance().set(&DataKey::Status, &EscrowStatus::Pending);
-        env.storage().instance().set(&DataKey::TotalReleased, &0i128);
-        env.storage().instance().set(&DataKey::FeePercentageBps, &fee_percentage_bps);
-
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalAmount, &total_amount);
+        env.storage()
+            .instance()
+            .set(&DataKey::EscrowStatus, &EscrowStatus::Pending);
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalReleased, &0i128);
+        env.storage()
+            .instance()
+            .set(&DataKey::FeePercentageBps, &fee_percentage_bps);
         _set_milestones(&env, milestones);
-        _set_released_milestones(&env, Vec::new(&env));
 
         EscrowInitializedEvent {
             buyer,
@@ -285,11 +319,13 @@ impl EscrowContract {
         .publish(&env);
     }
 
+    /// Set (or replace) the platform account that receives fees. Only callable
+    /// by the buyer or arbiter while the escrow is still Pending. (#240)
     pub fn set_platform_account(env: Env, caller: Address, platform_account: Address) {
         caller.require_auth();
 
         if _get_status(&env) != EscrowStatus::Pending {
-            panic!("cannot set platform account after escrow is active");
+            panic_with_error!(env, EscrowError::InvalidStatus);
         }
 
         let buyer: Address = env.storage().instance().get(&DataKey::Buyer).unwrap();
@@ -298,13 +334,17 @@ impl EscrowContract {
             panic_with_error!(env, EscrowError::NotAuthorized);
         }
 
-        env.storage().instance().set(&DataKey::PlatformAccount, &platform_account);
+        env.storage()
+            .instance()
+            .set(&DataKey::PlatformAccount, &platform_account);
     }
 
     pub fn get_platform_account(env: Env) -> Address {
         _get_platform_account(&env)
     }
 
+    /// Add a milestone while the escrow is still Pending with no funds released.
+    /// Any party (buyer / seller / arbiter) may call this. (#237)
     pub fn add_milestone(env: Env, caller: Address, milestone: Milestone) {
         caller.require_auth();
 
@@ -315,11 +355,9 @@ impl EscrowContract {
         if caller != buyer && caller != seller && caller != arbiter {
             panic_with_error!(env, EscrowError::NotAuthorized);
         }
-
         if _get_status(&env) != EscrowStatus::Pending {
             panic_with_error!(env, EscrowError::CannotAddMilestone);
         }
-
         if _get_total_released(&env) > 0 {
             panic_with_error!(env, EscrowError::CannotAddMilestone);
         }
@@ -342,27 +380,25 @@ impl EscrowContract {
     }
 
     pub fn get_total_released(env: Env) -> i128 {
-        env.storage()
-            .instance()
-            .get(&DataKey::TotalReleased)
-            .unwrap_or(0)
+        _get_total_released(&env)
     }
 
+    /// Release a single milestone to the seller with fee routing. (#237 + #240)
     pub fn approve_milestone_release(env: Env, milestone_id: u32) {
-        let buyer = env.storage().instance().get(&DataKey::Buyer).unwrap();
+        let buyer: Address = env.storage().instance().get(&DataKey::Buyer).unwrap();
         buyer.require_auth();
 
         let status = _get_status(&env);
         if status != EscrowStatus::Pending && status != EscrowStatus::PartiallyReleased {
-            panic!("escrow must be pending or partially released");
+            panic_with_error!(env, EscrowError::InvalidStatus);
         }
 
         let milestones = _get_milestones(&env);
-        if milestone_id as usize >= milestones.len() {
-            panic_with_error!(env, EscrowError::MilestoneNotFound);
-        }
+        let milestone = milestones
+            .iter()
+            .find(|m| m.id == milestone_id)
+            .unwrap_or_else(|| panic_with_error!(env, EscrowError::MilestoneNotFound));
 
-        let milestone = milestones.get(milestone_id as usize).unwrap();
         if milestone.released {
             panic_with_error!(env, EscrowError::MilestoneAlreadyReleased);
         }
@@ -371,6 +407,7 @@ impl EscrowContract {
         let token = _get_token(&env);
         let platform_account = _get_platform_account(&env);
         let fee_bps = _get_fee_percentage(&env);
+        let seller = _get_seller(&env);
 
         let milestone_amount = _calculate_milestone_amount(total_amount, milestone.percentage_bps);
         let fee_amount = _calculate_fee(milestone_amount, fee_bps);
@@ -380,33 +417,32 @@ impl EscrowContract {
             panic_with_error!(env, EscrowError::InsufficientBalance);
         }
 
-        if net_amount < 0 {
-            panic!("negative net amount after fee");
-        }
-
-        token::TokenClient::new(&env, &token)
-            .transfer(&env.current_contract_address(), &_get_seller(&env), &net_amount);
-
+        let token_client = token::TokenClient::new(&env, &token);
+        token_client.transfer(&env.current_contract_address(), &seller, &net_amount);
         if fee_amount > 0 {
-            token::TokenClient::new(&env, &token)
-                .transfer(&env.current_contract_address(), &platform_account, &fee_amount);
+            token_client.transfer(&env.current_contract_address(), &platform_account, &fee_amount);
+            FeeDeductedEvent {
+                fee_amount,
+                token: token.clone(),
+                platform_account: platform_account.clone(),
+                timestamp: env.ledger().timestamp(),
+            }
+            .publish(&env);
         }
 
-        let mut total_released: i128 = env.storage().instance().get(&DataKey::TotalReleased).unwrap_or(0);
-        total_released += milestone_amount;
-        env.storage().instance().set(&DataKey::TotalReleased, &total_released);
+        let new_total_released = _get_total_released(&env) + milestone_amount;
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalReleased, &new_total_released);
 
-        let mut milestones = _get_milestones(&env);
-        let milestone_mut = milestones.get_mut(milestone_id as usize).unwrap();
-        milestone_mut.released = true;
-        _set_milestones(&env, milestones);
         _mark_milestone_released(&env, milestone_id);
 
-        if total_released == total_amount {
-            _set_status(&env, EscrowStatus::Completed);
+        let new_status = if new_total_released >= total_amount {
+            EscrowStatus::Completed
         } else {
-            _set_status(&env, EscrowStatus::PartiallyReleased);
-        }
+            EscrowStatus::PartiallyReleased
+        };
+        _set_status(&env, new_status);
 
         MilestoneReleasedEvent {
             milestone_id,
@@ -417,18 +453,11 @@ impl EscrowContract {
             timestamp: env.ledger().timestamp(),
         }
         .publish(&env);
-
-        FeeDeductedEvent {
-            fee_amount,
-            token,
-            platform_account,
-            timestamp: env.ledger().timestamp(),
-        }
-        .publish(&env);
     }
 
+    /// Release the entire escrow balance at once (no milestones path). (#240)
     pub fn approve_release(env: Env) {
-        let buyer = env.storage().instance().get(&DataKey::Buyer).unwrap();
+        let buyer: Address = env.storage().instance().get(&DataKey::Buyer).unwrap();
         buyer.require_auth();
 
         if _get_status(&env) != EscrowStatus::Pending {
@@ -439,28 +468,32 @@ impl EscrowContract {
         let total_amount = _get_total_amount(&env);
         let fee_bps = _get_fee_percentage(&env);
         let platform_account = _get_platform_account(&env);
+        let seller = _get_seller(&env);
 
         let fee_amount = _calculate_fee(total_amount, fee_bps);
         let net_amount = total_amount - fee_amount;
 
-        if net_amount < 0 {
-            panic!("fee exceeds amount");
-        }
-
-        token::TokenClient::new(&env, &token)
-            .transfer(&env.current_contract_address(), &_get_seller(&env), &net_amount);
-
+        let token_client = token::TokenClient::new(&env, &token);
+        token_client.transfer(&env.current_contract_address(), &seller, &net_amount);
         if fee_amount > 0 {
-            token::TokenClient::new(&env, &token)
-                .transfer(&env.current_contract_address(), &platform_account, &fee_amount);
+            token_client.transfer(&env.current_contract_address(), &platform_account, &fee_amount);
+            FeeDeductedEvent {
+                fee_amount,
+                token: token.clone(),
+                platform_account: platform_account.clone(),
+                timestamp: env.ledger().timestamp(),
+            }
+            .publish(&env);
         }
 
-        env.storage().instance().set(&DataKey::TotalReleased, &total_amount);
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalReleased, &total_amount);
         _set_status(&env, EscrowStatus::Completed);
 
         EscrowReleaseApprovedEvent {
             buyer,
-            seller: _get_seller(&env),
+            seller,
             token,
             amount: total_amount,
             fee: fee_amount,
@@ -468,23 +501,17 @@ impl EscrowContract {
             timestamp: env.ledger().timestamp(),
         }
         .publish(&env);
-
-        FeeDeductedEvent {
-            fee_amount,
-            token,
-            platform_account,
-            timestamp: env.ledger().timestamp(),
-        }
-        .publish(&env);
     }
 
     pub fn open_dispute(env: Env) {
-        let buyer = env.storage().instance().get(&DataKey::Buyer).unwrap();
+        let buyer: Address = env.storage().instance().get(&DataKey::Buyer).unwrap();
         buyer.require_auth();
 
         let current_status = _get_status(&env);
-        if current_status != EscrowStatus::Pending && current_status != EscrowStatus::PartiallyReleased {
-            panic!("escrow cannot be disputed in current status");
+        if current_status != EscrowStatus::Pending
+            && current_status != EscrowStatus::PartiallyReleased
+        {
+            panic_with_error!(env, EscrowError::InvalidStatus);
         }
 
         let token = _get_token(&env);
@@ -502,18 +529,22 @@ impl EscrowContract {
     }
 
     pub fn resolve_dispute(env: Env, released_to_buyer: bool) {
-        let arbiter = env.storage().instance().get(&DataKey::Arbiter).unwrap();
+        let arbiter: Address = env.storage().instance().get(&DataKey::Arbiter).unwrap();
         arbiter.require_auth();
 
         if _get_status(&env) != EscrowStatus::Disputed {
-            panic!("escrow dispute is not open");
+            panic_with_error!(env, EscrowError::InvalidStatus);
         }
 
-        let buyer = env.storage().instance().get(&DataKey::Buyer).unwrap();
+        let buyer: Address = env.storage().instance().get(&DataKey::Buyer).unwrap();
         let seller = _get_seller(&env);
         let token = _get_token(&env);
-        let amount = _get_total_amount(&env);
-        let recipient = if released_to_buyer { buyer } else { seller };
+        let amount = _get_remaining_balance(&env);
+        let recipient = if released_to_buyer {
+            buyer.clone()
+        } else {
+            seller
+        };
 
         token::TokenClient::new(&env, &token)
             .transfer(&env.current_contract_address(), &recipient, &amount);
@@ -531,7 +562,7 @@ impl EscrowContract {
         .publish(&env);
     }
 
-    // ── Getters ─────────────────────────────────────────────────────────────────
+    // ── Getters ──────────────────────────────────────────────────────────────────
 
     pub fn buyer(env: Env) -> Address {
         env.storage().instance().get(&DataKey::Buyer).unwrap()
@@ -567,9 +598,5 @@ impl EscrowContract {
 
     pub fn platform_account(env: Env) -> Address {
         _get_platform_account(&env)
-    }
-
-    pub fn get_milestones(env: Env) -> Vec<Milestone> {
-        _get_milestones(&env)
     }
 }

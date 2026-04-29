@@ -318,22 +318,34 @@ fn record_token_payment(env: &Env, token: &Address, volume_amount: i128, fee_amo
 }
 
 pub fn get_token_dominance_metrics(env: &Env, tokens: &Vec<Address>) -> Vec<(Address, i128)> {
-    let mut token_volumes_native: std::vec::Vec<(Address, i128)> = std::vec::Vec::new();
-    
-    // Calculate total volume across all tokens
+    // Build the (token, volume) list in a soroban Vec. We avoid `std::vec::Vec`
+    // because the contract is `#![no_std]`.
+    let mut result: Vec<(Address, i128)> = Vec::new(env);
     for token in tokens.iter() {
         let volume = get_token_volume(env, &token);
-        token_volumes_native.push((token, volume));
+        result.push_back((token, volume));
     }
-    
-    // Sort by volume in descending order
-    token_volumes_native.sort_by(|a, b| b.1.cmp(&a.1));
-    
-    let mut result = Vec::new(env);
-    for item in token_volumes_native {
-        result.push_back(item);
+
+    // Insertion sort by volume descending. n is small (one entry per accepted
+    // token) so quadratic cost is fine and avoids allocator dependencies.
+    let n = result.len();
+    let mut i: u32 = 1;
+    while i < n {
+        let mut j: u32 = i;
+        while j > 0 {
+            let prev = result.get_unchecked(j - 1);
+            let curr = result.get_unchecked(j);
+            if curr.1 > prev.1 {
+                result.set(j - 1, curr);
+                result.set(j, prev);
+                j -= 1;
+            } else {
+                break;
+            }
+        }
+        i += 1;
     }
-    
+
     result
 }
 

@@ -44,4 +44,13 @@ pub enum ContractError {
     NoPendingFeeUpdate = 43,
     InvalidSwapPath = 44,
     InvalidSlippage = 45,
+    EventNotFound = 46,
+    EventSoldOut = 47,
+    InvalidCapacity = 48,
+    InvalidEventDate = 49,
+    InvalidRoyaltyBps = 50,
+    TicketNotFound = 51,
+    NotTicketOwner = 52,
+    TicketEventMismatch = 53,
+    InvalidResalePrice = 54,
 }
