@@ -276,7 +276,6 @@ impl EscrowContract {
         if amount <= 0 {
             panic!("amount must be positive");
         }
-
         env.storage().instance().set(&DataKey::Buyer, &buyer);
         env.storage().instance().set(&DataKey::Seller, &seller);
         env.storage().instance().set(&DataKey::Arbiter, &arbiter);
