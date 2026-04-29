@@ -1,10 +1,14 @@
 use crate::components::{core, reentrancy};
 use crate::errors::ContractError;
 use crate::events;
-use crate::types::{DataKey, PendingFee};
+use crate::types::{
+    DataKey, MerchantAnalytics, MerchantAnalyticsSummary, OracleConfig, PendingFee, TokenAnalytics,
+};
 use soroban_sdk::{panic_with_error, token, Address, Env, Vec};
 
 pub const FEE_UPDATE_DELAY: u64 = 172_800; // 48 hours in seconds
+pub const DAY_IN_SECONDS: u64 = 86400;
+pub const WEEK_IN_SECONDS: u64 = 604800;
 
 // TODO: create the functionality for withdrawing revenue by admin.
 
@@ -131,6 +135,57 @@ pub fn get_fee(env: &Env, token: &Address) -> i128 {
         .unwrap_or(0)
 }
 
+pub fn set_platform_account(env: &Env, admin: &Address, account: &Address) {
+    reentrancy::enter(env);
+    core::assert_admin(env, admin);
+    env.storage()
+        .persistent()
+        .set(&DataKey::PlatformAccount, account);
+    events::publish_platform_account_set_event(
+        env,
+        admin.clone(),
+        account.clone(),
+        env.ledger().timestamp(),
+    );
+    reentrancy::exit(env);
+}
+
+pub fn get_platform_account(env: &Env) -> Address {
+    env.storage()
+        .persistent()
+        .get(&DataKey::PlatformAccount)
+        .unwrap_or_else(|| core::get_admin(env))
+}
+
+pub fn set_token_oracle(env: &Env, admin: &Address, token: &Address, oracle: &OracleConfig) {
+    reentrancy::enter(env);
+    core::assert_admin(env, admin);
+
+    if !is_accepted_token(env, token) {
+        panic_with_error!(env, ContractError::TokenNotAccepted);
+    }
+
+    env.storage()
+        .persistent()
+        .set(&DataKey::TokenOracle(token.clone()), oracle);
+
+    events::publish_token_oracle_set_event(
+        env,
+        admin.clone(),
+        token.clone(),
+        oracle.contract.clone(),
+        env.ledger().timestamp(),
+    );
+    reentrancy::exit(env);
+}
+
+pub fn get_token_oracle(env: &Env, token: &Address) -> OracleConfig {
+    env.storage()
+        .persistent()
+        .get(&DataKey::TokenOracle(token.clone()))
+        .unwrap_or_else(|| panic_with_error!(env, ContractError::OracleNotConfigured))
+}
+
 pub fn calculate_fee(env: &Env, merchant: &Address, token: &Address, amount: i128) -> i128 {
     let fee_bps: i128 = get_fee(env, token);
     if fee_bps == 0 {
@@ -144,18 +199,187 @@ pub fn calculate_fee(env: &Env, merchant: &Address, token: &Address, amount: i12
 }
 
 pub fn get_merchant_volume(env: &Env, merchant: &Address, token: &Address) -> i128 {
+    get_merchant_analytics(env, merchant, token).total_volume
+}
+
+pub fn get_merchant_analytics(env: &Env, merchant: &Address, token: &Address) -> MerchantAnalytics {
     env.storage()
         .persistent()
-        .get(&DataKey::MerchantVolume(merchant.clone(), token.clone()))
+        .get(&DataKey::MerchantAnalytics(merchant.clone(), token.clone()))
+        .unwrap_or(MerchantAnalytics {
+            merchant: merchant.clone(),
+            token: token.clone(),
+            total_volume: env
+                .storage()
+                .persistent()
+                .get(&DataKey::MerchantVolume(merchant.clone(), token.clone()))
+                .unwrap_or(0),
+            total_fees: 0,
+            transaction_count: 0,
+            last_updated: 0,
+        })
+}
+
+pub fn get_merchant_analytics_summary(env: &Env, merchant: &Address) -> MerchantAnalyticsSummary {
+    env.storage()
+        .persistent()
+        .get(&DataKey::MerchantAnalyticsSummary(merchant.clone()))
+        .unwrap_or(MerchantAnalyticsSummary {
+            merchant: merchant.clone(),
+            total_volume: 0,
+            total_fees: 0,
+            transaction_count: 0,
+            last_updated: 0,
+        })
+}
+
+pub fn record_merchant_payment(
+    env: &Env,
+    merchant: &Address,
+    token: &Address,
+    volume_amount: i128,
+    fee_amount: i128,
+) {
+    let mut analytics = get_merchant_analytics(env, merchant, token);
+    analytics.total_volume += volume_amount;
+    analytics.total_fees += fee_amount;
+    analytics.transaction_count += 1;
+    analytics.last_updated = env.ledger().timestamp();
+
+    env.storage().persistent().set(
+        &DataKey::MerchantAnalytics(merchant.clone(), token.clone()),
+        &analytics,
+    );
+    env.storage().persistent().set(
+        &DataKey::MerchantVolume(merchant.clone(), token.clone()),
+        &analytics.total_volume,
+    );
+
+    let mut summary = get_merchant_analytics_summary(env, merchant);
+    summary.total_volume += volume_amount;
+    summary.total_fees += fee_amount;
+    summary.transaction_count += 1;
+    summary.last_updated = analytics.last_updated;
+
+    env.storage().persistent().set(
+        &DataKey::MerchantAnalyticsSummary(merchant.clone()),
+        &summary,
+    );
+
+    // Update global token analytics
+    record_token_payment(env, token, volume_amount, fee_amount);
+}
+
+pub fn get_token_analytics(env: &Env, token: &Address) -> TokenAnalytics {
+    env.storage()
+        .persistent()
+        .get(&DataKey::TokenAnalytics(token.clone()))
+        .unwrap_or(TokenAnalytics {
+            token: token.clone(),
+            total_volume: 0,
+            total_fees: 0,
+            transaction_count: 0,
+            unique_merchants: 0,
+            last_updated: 0,
+        })
+}
+
+pub fn get_token_volume(env: &Env, token: &Address) -> i128 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::TokenVolume(token.clone()))
         .unwrap_or(0)
 }
 
-pub fn increment_merchant_volume(env: &Env, merchant: &Address, token: &Address, amount: i128) {
-    let current = get_merchant_volume(env, merchant, token);
+fn record_token_payment(env: &Env, token: &Address, volume_amount: i128, fee_amount: i128) {
+    let mut analytics = get_token_analytics(env, token);
+    
+    // Check if this is a new merchant for this token
+    let current_volume = get_token_volume(env, token);
+    let is_new_merchant = current_volume == 0;
+    
+    analytics.total_volume += volume_amount;
+    analytics.total_fees += fee_amount;
+    analytics.transaction_count += 1;
+    if is_new_merchant {
+        analytics.unique_merchants += 1;
+    }
+    analytics.last_updated = env.ledger().timestamp();
+
     env.storage().persistent().set(
-        &DataKey::MerchantVolume(merchant.clone(), token.clone()),
-        &(current + amount),
+        &DataKey::TokenAnalytics(token.clone()),
+        &analytics,
     );
+    
+    env.storage().persistent().set(
+        &DataKey::TokenVolume(token.clone()),
+        &analytics.total_volume,
+    );
+}
+
+pub fn get_token_dominance_metrics(env: &Env, tokens: &Vec<Address>) -> Vec<(Address, i128)> {
+    // Build the (token, volume) list in a soroban Vec. We avoid `std::vec::Vec`
+    // because the contract is `#![no_std]`.
+    let mut result: Vec<(Address, i128)> = Vec::new(env);
+    for token in tokens.iter() {
+        let volume = get_token_volume(env, &token);
+        result.push_back((token, volume));
+    }
+
+    // Insertion sort by volume descending. n is small (one entry per accepted
+    // token) so quadratic cost is fine and avoids allocator dependencies.
+    let n = result.len();
+    let mut i: u32 = 1;
+    while i < n {
+        let mut j: u32 = i;
+        while j > 0 {
+            let prev = result.get_unchecked(j - 1);
+            let curr = result.get_unchecked(j);
+            if curr.1 > prev.1 {
+                result.set(j - 1, curr);
+                result.set(j, prev);
+                j -= 1;
+            } else {
+                break;
+            }
+        }
+        i += 1;
+    }
+
+    result
+}
+
+pub fn get_top_tokens_by_volume(env: &Env, limit: u32) -> Vec<(Address, i128)> {
+    let accepted_tokens = crate::components::admin::get_accepted_tokens(env);
+    let mut all_metrics = get_token_dominance_metrics(env, &accepted_tokens);
+    
+    // Truncate to specified limit
+    while all_metrics.len() > limit {
+        all_metrics.pop_back();
+    }
+    
+    all_metrics
+}
+
+pub fn get_token_market_share(env: &Env, token: &Address) -> i128 {
+    let token_volume = get_token_volume(env, token);
+    if token_volume == 0 {
+        return 0;
+    }
+    
+    let accepted_tokens = crate::components::admin::get_accepted_tokens(env);
+    let mut total_volume: i128 = 0;
+    
+    for t in accepted_tokens.iter() {
+        total_volume += get_token_volume(env, &t);
+    }
+    
+    if total_volume == 0 {
+        return 0;
+    }
+    
+    // Return market share as basis points (10000 = 100%)
+    (token_volume * 10000) / total_volume
 }
 
 fn apply_volume_discount(fee_bps: i128, volume: i128) -> i128 {
