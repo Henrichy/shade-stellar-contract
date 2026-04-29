@@ -326,3 +326,56 @@ fn bps_of(value: i128, bps: u32) -> Option<i128> {
     let scaled = value.checked_mul(bps as i128)?;
     Some(scaled / MAX_BPS as i128)
 }
+
+/// Discount tiers: quantity → basis-point discount off the total price.
+/// 500 bps = 5%, 1000 bps = 10%, 1500 bps = 15%.
+fn group_discount_bps(quantity: u32) -> i128 {
+    if quantity >= 20 {
+        1500
+    } else if quantity >= 10 {
+        1000
+    } else if quantity >= 5 {
+        500
+    } else {
+        0
+    }
+}
+
+/// Purchase multiple tickets for an event in a single call with automatic
+/// group discount applied in Shade tokens.  The buyer pays the discounted
+/// total in one transfer; the merchant receives the net amount.
+pub fn purchase_tickets_bulk(
+    env: &Env,
+    event_id: &u64,
+    buyer: &Address,
+    quantity: u32,
+    shade_token: &Address,
+    merchant_account: &Address,
+) {
+    buyer.require_auth();
+
+    if quantity == 0 {
+        panic_with_error!(env, ContractError::InvalidAmount);
+    }
+
+    let mut event: Event = env
+        .storage()
+        .persistent()
+        .get(&DataKey::Event(*event_id))
+        .unwrap_or_else(|| panic_with_error!(env, ContractError::InvoiceNotFound));
+
+    if event.sold.saturating_add(quantity) > event.capacity {
+        panic_with_error!(env, ContractError::InvalidAmount);
+    }
+
+    let gross = event.ticket_price.saturating_mul(i128::from(quantity));
+    let discount_bps = group_discount_bps(quantity);
+    let discount_amount = gross * discount_bps / 10_000;
+    let net = gross - discount_amount;
+
+    let token_client = token::TokenClient::new(env, shade_token);
+    token_client.transfer(buyer, merchant_account, &net);
+
+    event.sold = event.sold.saturating_add(quantity);
+    env.storage().persistent().set(&DataKey::Event(*event_id), &event);
+}

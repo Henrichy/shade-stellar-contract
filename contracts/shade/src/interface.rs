@@ -157,6 +157,10 @@ pub trait ShadeTrait {
     /// Cancel a subscription. Either the customer or the merchant may call this.
     fn cancel_subscription(env: Env, caller: Address, subscription_id: u64);
 
+    /// Deactivate a subscription plan so that no new customers can enroll.
+    /// Only the merchant who owns the plan may call this.
+    fn deactivate_plan(env: Env, caller: Address, plan_id: u64);
+
     /// Get all transactions executed by a specific customer address.
     fn get_user_transactions(env: Env, user: Address) -> Vec<Transaction>;
 
@@ -191,6 +195,18 @@ pub trait ShadeTrait {
     fn get_ticket(env: Env, ticket_id: u64) -> Ticket;
     fn get_event_tickets(env: Env, event_id: u64) -> Vec<u64>;
     fn get_user_tickets(env: Env, user: Address) -> Vec<u64>;
+
+    /// Purchase multiple tickets in a single call.
+    /// Applies automatic group discount in Shade tokens:
+    /// 5–9 tickets → 5%, 10–19 → 10%, 20+ → 15%.
+    fn purchase_tickets_bulk(
+        env: Env,
+        event_id: u64,
+        buyer: Address,
+        quantity: u32,
+        shade_token: Address,
+        merchant_account: Address,
+    );
 
     // ── Token analytics ────────────────────────────────────────────────────────
 

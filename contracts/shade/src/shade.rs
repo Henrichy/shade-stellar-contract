@@ -399,6 +399,11 @@ impl ShadeTrait for Shade {
         subscription_component::cancel_subscription(&env, caller, subscription_id);
     }
 
+    fn deactivate_plan(env: Env, caller: Address, plan_id: u64) {
+        pausable_component::assert_not_paused(&env);
+        subscription_component::deactivate_plan(&env, caller, plan_id);
+    }
+
     fn set_merchant_webhook(env: Env, merchant: Address, webhook: String) {
         pausable_component::assert_not_paused(&env);
         merchant_component::set_merchant_webhook(&env, &merchant, &webhook);
@@ -500,6 +505,24 @@ impl ShadeTrait for Shade {
 
     fn get_user_tickets(env: Env, user: Address) -> Vec<u64> {
         crate::components::event::get_user_tickets(&env, &user)
+    }
+    fn purchase_tickets_bulk(
+        env: Env,
+        event_id: u64,
+        buyer: Address,
+        quantity: u32,
+        shade_token: Address,
+        merchant_account: Address,
+    ) {
+        pausable_component::assert_not_paused(&env);
+        crate::components::event::purchase_tickets_bulk(
+            &env,
+            &event_id,
+            &buyer,
+            quantity,
+            &shade_token,
+            &merchant_account,
+        );
     }
 
     fn get_token_analytics(env: Env, token: Address) -> TokenAnalytics {
