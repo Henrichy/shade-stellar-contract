@@ -40,6 +40,10 @@ pub enum DataKey {
     // --- Event system ---
     Event(u64),
     EventCount,
+    Ticket(u64),
+    TicketCount,
+    EventTickets(u64),
+    UserTickets(Address),
     // --- Global token analytics ---
     TokenAnalytics(Address),
     TokenVolume(Address),
@@ -62,25 +66,6 @@ pub struct Merchant {
     pub date_registered: u64,
     pub account: Address,
     pub webhook: String,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Invoice {
-    pub id: u64,
-    pub description: soroban_sdk::String,
-    pub amount: i128,
-    pub token: Address,
-    pub status: InvoiceStatus,
-    pub merchant_id: u64,
-    pub payer: Option<Address>,
-    pub date_created: u64,
-    pub date_paid: Option<u64>,
-    pub amount_paid: i128,
-    pub amount_refunded: i128,
-    pub expires_at: Option<u64>,
-    pub pricing_mode: InvoicePricingMode,
-    pub fiat_pricing: Option<FiatPricing>,
 }
 
 #[contracttype]
@@ -110,6 +95,56 @@ pub struct FiatPricing {
     pub currency: String,
     pub amount: i128,
     pub decimals: u32,
+}
+
+/// Soroban-compatible optional wrapper for FiatPricing.
+/// `Option<FiatPricing>` cannot be used directly inside a `#[contracttype]`
+/// struct because the SDK does not implement the required XDR conversions for
+/// `Option<T>` where T is a user-defined struct. An explicit enum variant is
+/// the idiomatic workaround.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum FiatPricingData {
+    None,
+    Some(FiatPricing),
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Invoice {
+    pub id: u64,
+    pub description: soroban_sdk::String,
+    pub amount: i128,
+    pub token: Address,
+    pub status: InvoiceStatus,
+    pub merchant_id: u64,
+    pub payer: Option<Address>,
+    pub date_created: u64,
+    pub date_paid: Option<u64>,
+    pub amount_paid: i128,
+    pub amount_refunded: i128,
+    pub expires_at: Option<u64>,
+    pub pricing_mode: InvoicePricingMode,
+    pub fiat_pricing: FiatPricingData,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Invoice {
+    pub id: u64,
+    pub description: soroban_sdk::String,
+    pub amount: i128,
+    pub token: Address,
+    pub status: InvoiceStatus,
+    pub merchant_id: u64,
+    pub payer: Option<Address>,
+    pub date_created: u64,
+    pub date_paid: Option<u64>,
+    pub amount_paid: i128,
+    pub amount_refunded: i128,
+    pub expires_at: Option<u64>,
+    pub pricing_mode: InvoicePricingMode,
+    pub fiat_pricing: Option<FiatPricing>,
 }
 
 #[contracttype]
@@ -285,6 +320,19 @@ pub struct Event {
     pub capacity: u32,
     pub sold: u32,
     pub date: u64,
+    /// Scheduled event date (unix seconds). Must be >= ledger timestamp at creation.
+    pub event_date: u64,
+    /// Royalty paid to the organizer on each resale, in basis points (10_000 = 100%).
+    pub royalty_bps: u32,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Ticket {
+    pub id: u64,
+    pub event_id: u64,
+    pub owner: Address,
+    pub minted_at: u64,
 }
 
 #[contracttype]

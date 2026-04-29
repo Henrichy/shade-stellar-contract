@@ -1,6 +1,8 @@
 #![no_std]
 
 mod errors;
+#[cfg(test)]
+mod test_integration;
 
 use crate::errors::TicketingError;
 use soroban_sdk::{

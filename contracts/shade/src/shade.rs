@@ -2,7 +2,7 @@ use crate::components::{
     access_control as access_control_component, admin as admin_component, core as core_component,
     invoice as invoice_component, merchant as merchant_component, pausable as pausable_component,
     subscription as subscription_component, upgrade as upgrade_component,
-    history as history_component, payment as payment_component,
+    history as history_component,
 };
 use crate::errors::ContractError;
 use crate::events;
@@ -10,8 +10,7 @@ use crate::interface::ShadeTrait;
 use crate::types::{
     ContractInfo, CrossChainBridgePayload, DataKey, Event, Invoice, InvoiceFilter, Merchant,
     MerchantAnalytics, MerchantAnalyticsSummary, MerchantFilter, OracleConfig, PaymentPayload,
-    PaymentRoute, PendingFee, Role, Subscription, SubscriptionPlan, SwapRoute, TokenAnalytics,
-    Transaction
+    PendingFee, Role, Subscription, SubscriptionPlan, Ticket, TokenAnalytics, Transaction,
 };
 use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env, String, Vec};
 
@@ -296,21 +295,6 @@ impl ShadeTrait for Shade {
     fn get_merchant_volume(env: Env, merchant: Address, token: Address) -> i128 {
         admin_component::get_merchant_volume(&env, &merchant, &token)
     }
-    fn get_daily_volume(env: Env, token: Address) -> i128 {
-        admin_component::get_daily_volume(&env, &token)
-    }
-
-    fn get_weekly_volume(env: Env, token: Address) -> i128 {
-        admin_component::get_weekly_volume(&env, &token)
-    }
-
-    fn get_merchant_daily_volume(env: Env, merchant: Address, token: Address) -> i128 {
-        admin_component::get_merchant_daily_volume(&env, &merchant, &token)
-    }
-
-    fn get_merchant_weekly_volume(env: Env, merchant: Address, token: Address) -> i128 {
-        admin_component::get_merchant_weekly_volume(&env, &merchant, &token)
-    }
 
     fn get_merchant_analytics(env: Env, merchant: Address, token: Address) -> MerchantAnalytics {
         admin_component::get_merchant_analytics(&env, &merchant, &token)
@@ -415,6 +399,11 @@ impl ShadeTrait for Shade {
         subscription_component::cancel_subscription(&env, caller, subscription_id);
     }
 
+    fn deactivate_plan(env: Env, caller: Address, plan_id: u64) {
+        pausable_component::assert_not_paused(&env);
+        subscription_component::deactivate_plan(&env, caller, plan_id);
+    }
+
     fn set_merchant_webhook(env: Env, merchant: Address, webhook: String) {
         pausable_component::assert_not_paused(&env);
         merchant_component::set_merchant_webhook(&env, &merchant, &webhook);
@@ -461,7 +450,8 @@ impl ShadeTrait for Shade {
         );
     }
 
-    // --- Event system ---
+    // --- Event ticketing system ---
+    #[allow(clippy::too_many_arguments)]
     fn create_event(
         env: Env,
         merchant: Address,
@@ -469,18 +459,70 @@ impl ShadeTrait for Shade {
         ticket_price: i128,
         token: Address,
         capacity: u32,
+        event_date: u64,
+        royalty_bps: u32,
     ) -> u64 {
         pausable_component::assert_not_paused(&env);
-        crate::components::event::create_event(&env, &merchant, &name, &ticket_price, &token, &capacity)
+        crate::components::event::create_event(
+            &env,
+            &merchant,
+            &name,
+            &ticket_price,
+            &token,
+            &capacity,
+            &event_date,
+            &royalty_bps,
+        )
     }
 
-    fn purchase_ticket(env: Env, event_id: u64, buyer: Address) {
+    fn purchase_ticket(env: Env, event_id: u64, buyer: Address) -> u64 {
         pausable_component::assert_not_paused(&env);
-        crate::components::event::purchase_ticket(&env, &event_id, &buyer);
+        crate::components::event::purchase_ticket(&env, &event_id, &buyer)
     }
 
-    fn get_event(env: Env, event_id: u64) -> crate::types::Event {
+    fn resell_ticket(
+        env: Env,
+        seller: Address,
+        buyer: Address,
+        ticket_id: u64,
+        resale_price: i128,
+    ) {
+        pausable_component::assert_not_paused(&env);
+        crate::components::event::resell_ticket(&env, &seller, &buyer, ticket_id, resale_price);
+    }
+
+    fn get_event(env: Env, event_id: u64) -> Event {
         crate::components::event::get_event(&env, &event_id)
+    }
+
+    fn get_ticket(env: Env, ticket_id: u64) -> Ticket {
+        crate::components::event::get_ticket(&env, ticket_id)
+    }
+
+    fn get_event_tickets(env: Env, event_id: u64) -> Vec<u64> {
+        crate::components::event::get_event_tickets(&env, event_id)
+    }
+
+    fn get_user_tickets(env: Env, user: Address) -> Vec<u64> {
+        crate::components::event::get_user_tickets(&env, &user)
+    }
+    fn purchase_tickets_bulk(
+        env: Env,
+        event_id: u64,
+        buyer: Address,
+        quantity: u32,
+        shade_token: Address,
+        merchant_account: Address,
+    ) {
+        pausable_component::assert_not_paused(&env);
+        crate::components::event::purchase_tickets_bulk(
+            &env,
+            &event_id,
+            &buyer,
+            quantity,
+            &shade_token,
+            &merchant_account,
+        );
     }
 
     fn get_token_analytics(env: Env, token: Address) -> TokenAnalytics {
