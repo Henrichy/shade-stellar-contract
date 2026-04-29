@@ -65,6 +65,11 @@ pub fn create_event(
         date: env.ledger().timestamp(),
         event_date: *event_date,
         royalty_bps: *royalty_bps,
+        early_bird_end: 0,
+        early_bird_discount_bps: 0,
+        late_markup_bps: 0,
+        cancelled: false,
+        refunds_processed: false,
     };
 
     env.storage().persistent().set(&DataKey::Event(id), &event);
@@ -104,6 +109,10 @@ pub fn purchase_ticket(env: &Env, event_id: &u64, buyer: &Address) -> u64 {
 
     let mut event = get_event(env, event_id);
 
+    if event.cancelled {
+        panic_with_error!(env, ContractError::InvalidInvoiceStatus);
+    }
+
     if event.sold >= event.capacity {
         panic_with_error!(env, ContractError::EventSoldOut);
     }
@@ -117,7 +126,7 @@ pub fn purchase_ticket(env: &Env, event_id: &u64, buyer: &Address) -> u64 {
     let merchant_account = merchant::get_merchant_account(env, event.merchant_id);
     let platform_account = admin::get_platform_account(env);
 
-    let amount = event.ticket_price;
+    let amount = resolve_current_ticket_price(env, &event);
     let fee = admin::calculate_fee(env, &merchant_address, &event.token, amount);
     if fee < 0 || fee >= amount {
         panic_with_error!(env, ContractError::InvalidAmount);
@@ -144,6 +153,7 @@ pub fn purchase_ticket(env: &Env, event_id: &u64, buyer: &Address) -> u64 {
         event_id: *event_id,
         owner: buyer.clone(),
         minted_at: env.ledger().timestamp(),
+        purchase_price: amount,
     };
 
     env.storage()
@@ -186,6 +196,87 @@ pub fn purchase_ticket(env: &Env, event_id: &u64, buyer: &Address) -> u64 {
     new_ticket_id
 }
 
+pub fn configure_dynamic_pricing(
+    env: &Env,
+    merchant_addr: &Address,
+    event_id: u64,
+    early_bird_end: u64,
+    early_bird_discount_bps: u32,
+    late_markup_bps: u32,
+) {
+    merchant_addr.require_auth();
+
+    let mut event = get_event(env, &event_id);
+
+    if event.cancelled {
+        panic_with_error!(env, ContractError::InvalidInvoiceStatus);
+    }
+
+    if !is_event_merchant(env, &event, merchant_addr) {
+        panic_with_error!(env, ContractError::NotAuthorized);
+    }
+
+    if early_bird_discount_bps > MAX_BPS || late_markup_bps > MAX_BPS {
+        panic_with_error!(env, ContractError::InvalidAmount);
+    }
+
+    if early_bird_end != 0 {
+        if early_bird_end > event.event_date || early_bird_end < env.ledger().timestamp() {
+            panic_with_error!(env, ContractError::InvalidAmount);
+        }
+    }
+
+    event.early_bird_end = early_bird_end;
+    event.early_bird_discount_bps = early_bird_discount_bps;
+    event.late_markup_bps = late_markup_bps;
+
+    env.storage().persistent().set(&DataKey::Event(event_id), &event);
+}
+
+pub fn get_current_ticket_price(env: &Env, event_id: u64) -> i128 {
+    let event = get_event(env, &event_id);
+    resolve_current_ticket_price(env, &event)
+}
+
+pub fn cancel_event_and_batch_refund(env: &Env, merchant_addr: &Address, event_id: u64) {
+    merchant_addr.require_auth();
+
+    let mut event = get_event(env, &event_id);
+
+    if !is_event_merchant(env, &event, merchant_addr) {
+        panic_with_error!(env, ContractError::NotAuthorized);
+    }
+
+    if event.refunds_processed {
+        panic_with_error!(env, ContractError::InvalidInvoiceStatus);
+    }
+
+    event.cancelled = true;
+
+    let token_client = token::TokenClient::new(env, &event.token);
+
+    let ticket_ids: Vec<u64> = env
+        .storage()
+        .persistent()
+        .get(&DataKey::EventTickets(event_id))
+        .unwrap_or_else(|| Vec::new(env));
+
+    for ticket_id in ticket_ids.iter() {
+        let ticket: Ticket = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Ticket(ticket_id))
+            .unwrap_or_else(|| panic_with_error!(env, ContractError::TicketNotFound));
+
+        if ticket.purchase_price > 0 {
+            token_client.transfer(merchant_addr, &ticket.owner, &ticket.purchase_price);
+        }
+    }
+
+    event.refunds_processed = true;
+    env.storage().persistent().set(&DataKey::Event(event_id), &event);
+}
+
 // ── Resale with royalty (Issue #254) ──────────────────────────────────────────
 
 pub fn resell_ticket(
@@ -196,6 +287,7 @@ pub fn resell_ticket(
     resale_price: i128,
 ) {
     seller.require_auth();
+    buyer.require_auth();
 
     if resale_price <= 0 {
         panic_with_error!(env, ContractError::InvalidResalePrice);
@@ -215,6 +307,10 @@ pub fn resell_ticket(
     }
 
     let event = get_event(env, &ticket.event_id);
+
+    if event.cancelled {
+        panic_with_error!(env, ContractError::InvalidInvoiceStatus);
+    }
 
     if !admin::is_accepted_token(env, &event.token) {
         panic_with_error!(env, ContractError::TokenNotAccepted);
@@ -364,11 +460,16 @@ pub fn purchase_tickets_bulk(
         .get(&DataKey::Event(*event_id))
         .unwrap_or_else(|| panic_with_error!(env, ContractError::InvoiceNotFound));
 
+    if event.cancelled {
+        panic_with_error!(env, ContractError::InvalidInvoiceStatus);
+    }
+
     if event.sold.saturating_add(quantity) > event.capacity {
         panic_with_error!(env, ContractError::InvalidAmount);
     }
 
-    let gross = event.ticket_price.saturating_mul(i128::from(quantity));
+    let unit_price = resolve_current_ticket_price(env, &event);
+    let gross = unit_price.saturating_mul(i128::from(quantity));
     let discount_bps = group_discount_bps(quantity);
     let discount_amount = gross * discount_bps / 10_000;
     let net = gross - discount_amount;
@@ -378,4 +479,32 @@ pub fn purchase_tickets_bulk(
 
     event.sold = event.sold.saturating_add(quantity);
     env.storage().persistent().set(&DataKey::Event(*event_id), &event);
+}
+
+fn is_event_merchant(env: &Env, event: &Event, merchant_addr: &Address) -> bool {
+    let m: Merchant = env
+        .storage()
+        .persistent()
+        .get(&DataKey::Merchant(event.merchant_id))
+        .unwrap_or_else(|| panic_with_error!(env, ContractError::MerchantNotFound));
+    m.address == *merchant_addr
+}
+
+fn resolve_current_ticket_price(env: &Env, event: &Event) -> i128 {
+    let now = env.ledger().timestamp();
+    let base = event.ticket_price;
+
+    if event.early_bird_end != 0 && now <= event.early_bird_end {
+        let discount = bps_of(base, event.early_bird_discount_bps)
+            .unwrap_or_else(|| panic_with_error!(env, ContractError::InvalidAmount));
+        return base - discount;
+    }
+
+    if event.early_bird_end != 0 && now > event.early_bird_end {
+        let markup = bps_of(base, event.late_markup_bps)
+            .unwrap_or_else(|| panic_with_error!(env, ContractError::InvalidAmount));
+        return base + markup;
+    }
+
+    base
 }

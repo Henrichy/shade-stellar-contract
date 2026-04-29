@@ -480,6 +480,34 @@ impl ShadeTrait for Shade {
         crate::components::event::purchase_ticket(&env, &event_id, &buyer)
     }
 
+    fn configure_dynamic_pricing(
+        env: Env,
+        merchant: Address,
+        event_id: u64,
+        early_bird_end: u64,
+        early_bird_discount_bps: u32,
+        late_markup_bps: u32,
+    ) {
+        pausable_component::assert_not_paused(&env);
+        crate::components::event::configure_dynamic_pricing(
+            &env,
+            &merchant,
+            event_id,
+            early_bird_end,
+            early_bird_discount_bps,
+            late_markup_bps,
+        );
+    }
+
+    fn get_current_ticket_price(env: Env, event_id: u64) -> i128 {
+        crate::components::event::get_current_ticket_price(&env, event_id)
+    }
+
+    fn cancel_event_and_batch_refund(env: Env, merchant: Address, event_id: u64) {
+        pausable_component::assert_not_paused(&env);
+        crate::components::event::cancel_event_and_batch_refund(&env, &merchant, event_id);
+    }
+
     fn resell_ticket(
         env: Env,
         seller: Address,
