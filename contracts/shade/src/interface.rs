@@ -1,7 +1,7 @@
 use crate::types::{
     CrossChainBridgePayload, Event, Invoice, InvoiceFilter, Merchant, MerchantAnalytics,
     MerchantAnalyticsSummary, MerchantFilter, OracleConfig, PaymentPayload, PendingFee, Role,
-    Subscription, SubscriptionPlan, TokenAnalytics, Transaction,
+    Subscription, SubscriptionPlan, Ticket, TokenAnalytics, Transaction
 };
 use soroban_sdk::{contracttrait, Address, BytesN, Env, String, Vec};
 
@@ -171,7 +171,8 @@ pub trait ShadeTrait {
         payload: CrossChainBridgePayload,
     );
 
-    // --- Event system ---
+    // --- Event ticketing system ---
+    #[allow(clippy::too_many_arguments)]
     fn create_event(
         env: Env,
         merchant: Address,
@@ -179,9 +180,21 @@ pub trait ShadeTrait {
         ticket_price: i128,
         token: Address,
         capacity: u32,
+        event_date: u64,
+        royalty_bps: u32,
     ) -> u64;
-    fn purchase_ticket(env: Env, event_id: u64, buyer: Address);
+    fn purchase_ticket(env: Env, event_id: u64, buyer: Address) -> u64;
+    fn resell_ticket(
+        env: Env,
+        seller: Address,
+        buyer: Address,
+        ticket_id: u64,
+        resale_price: i128,
+    );
     fn get_event(env: Env, event_id: u64) -> Event;
+    fn get_ticket(env: Env, ticket_id: u64) -> Ticket;
+    fn get_event_tickets(env: Env, event_id: u64) -> Vec<u64>;
+    fn get_user_tickets(env: Env, user: Address) -> Vec<u64>;
 
     /// Purchase multiple tickets in a single call.
     /// Applies automatic group discount in Shade tokens:
