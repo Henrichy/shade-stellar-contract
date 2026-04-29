@@ -1,4 +1,4 @@
-use soroban_sdk::{contractevent, Address, BytesN, Env, Vec};
+use soroban_sdk::{contractevent, Address, BytesN, Env, String, Vec};
 
 // ── Existing events ───────────────────────────────────────────────────────────
 
@@ -182,6 +182,30 @@ pub fn publish_merchant_verified_event(env: &Env, merchant_id: u64, status: bool
     MerchantVerifiedEvent {
         merchant_id,
         status,
+        timestamp,
+    }
+    .publish(env);
+}
+
+#[contractevent]
+pub struct MerchantWebhookSetEvent {
+    pub merchant: Address,
+    pub merchant_id: u64,
+    pub webhook: String,
+    pub timestamp: u64,
+}
+
+pub fn publish_merchant_webhook_set_event(
+    env: &Env,
+    merchant: Address,
+    merchant_id: u64,
+    webhook: String,
+    timestamp: u64,
+) {
+    MerchantWebhookSetEvent {
+        merchant,
+        merchant_id,
+        webhook,
         timestamp,
     }
     .publish(env);
@@ -592,26 +616,20 @@ pub fn publish_nonce_invalidated_event(
     .publish(env);
 }
 
-#[derive(Clone)]
-pub struct CrossChainBridgePlaceholderEvent {
+#[contractevent]
+pub struct BridgePlaceholderEvent {
     pub caller: Address,
     pub payload: crate::types::CrossChainBridgePayload,
     pub timestamp: u64,
 }
 
-impl CrossChainBridgePlaceholderEvent {
-    pub fn publish(self, env: &Env) {
-        env.events().publish(("cross_chain_bridge", "placeholder"), (&self.caller, &self.timestamp));
-    }
-}
-
-pub fn publish_cross_chain_bridge_placeholder_event(
+pub fn publish_bridge_placeholder_event(
     env: &Env,
     caller: Address,
     payload: crate::types::CrossChainBridgePayload,
     timestamp: u64,
 ) {
-    CrossChainBridgePlaceholderEvent {
+    BridgePlaceholderEvent {
         caller,
         payload,
         timestamp,
@@ -859,91 +877,130 @@ pub fn publish_admin_transfer_accepted_event(
     .publish(env);
 }
 
-#[derive(Clone)]
-pub struct AutoWithdrawalThresholdSetEvent {
+// ── Event ticketing system ────────────────────────────────────────────────────
+
+#[contractevent]
+pub struct EventCreatedEvent {
+    pub event_id: u64,
+    pub merchant: Address,
     pub merchant_id: u64,
+    pub name: String,
+    pub ticket_price: i128,
     pub token: Address,
-    pub threshold: i128,
+    pub capacity: u32,
+    pub event_date: u64,
+    pub royalty_bps: u32,
     pub timestamp: u64,
 }
 
-impl AutoWithdrawalThresholdSetEvent {
-    pub fn publish(self, env: &Env) {
-        env.events().publish(("auto_withdrawal", "threshold_set"), (&self.merchant_id, &self.token, &self.threshold, &self.timestamp));
-    }
-}
-
-pub fn publish_auto_withdrawal_threshold_set_event(
+#[allow(clippy::too_many_arguments)]
+pub fn publish_event_created_event(
     env: &Env,
+    event_id: u64,
+    merchant: Address,
     merchant_id: u64,
+    name: String,
+    ticket_price: i128,
     token: Address,
-    threshold: i128,
+    capacity: u32,
+    event_date: u64,
+    royalty_bps: u32,
+    timestamp: u64,
 ) {
-    AutoWithdrawalThresholdSetEvent {
+    EventCreatedEvent {
+        event_id,
+        merchant,
         merchant_id,
+        name,
+        ticket_price,
         token,
-        threshold,
-        timestamp: env.ledger().timestamp(),
+        capacity,
+        event_date,
+        royalty_bps,
+        timestamp,
     }
     .publish(env);
 }
 
-#[derive(Clone)]
-pub struct AutoWithdrawalRecipientSetEvent {
+#[contractevent]
+pub struct TicketPurchasedEvent {
+    pub ticket_id: u64,
+    pub event_id: u64,
     pub merchant_id: u64,
-    pub recipient: Address,
-    pub timestamp: u64,
-}
-
-impl AutoWithdrawalRecipientSetEvent {
-    pub fn publish(self, env: &Env) {
-        env.events()
-            .publish(("auto_withdrawal", "recipient_set"), (&self.merchant_id, &self.recipient, &self.timestamp));
-    }
-}
-
-pub fn publish_auto_withdrawal_recipient_set_event(
-    env: &Env,
-    merchant_id: u64,
-    recipient: Address,
-) {
-    AutoWithdrawalRecipientSetEvent {
-        merchant_id,
-        recipient,
-        timestamp: env.ledger().timestamp(),
-    }
-    .publish(env);
-}
-
-#[derive(Clone)]
-pub struct AutoWithdrawalTriggeredEvent {
-    pub merchant_id: u64,
-    pub token: Address,
+    pub buyer: Address,
     pub amount: i128,
-    pub recipient: Address,
+    pub fee: i128,
+    pub merchant_amount: i128,
+    pub token: Address,
     pub timestamp: u64,
 }
 
-impl AutoWithdrawalTriggeredEvent {
-    pub fn publish(self, env: &Env) {
-        env.events()
-            .publish(("auto_withdrawal", "triggered"), (&self.merchant_id, &self.token, &self.amount, &self.recipient, &self.timestamp));
+#[allow(clippy::too_many_arguments)]
+pub fn publish_ticket_purchased_event(
+    env: &Env,
+    ticket_id: u64,
+    event_id: u64,
+    merchant_id: u64,
+    buyer: Address,
+    amount: i128,
+    fee: i128,
+    merchant_amount: i128,
+    token: Address,
+    timestamp: u64,
+) {
+    TicketPurchasedEvent {
+        ticket_id,
+        event_id,
+        merchant_id,
+        buyer,
+        amount,
+        fee,
+        merchant_amount,
+        token,
+        timestamp,
     }
+    .publish(env);
 }
 
-pub fn publish_auto_withdrawal_triggered_event(
+#[contractevent]
+pub struct TicketResoldEvent {
+    pub ticket_id: u64,
+    pub event_id: u64,
+    pub merchant_id: u64,
+    pub seller: Address,
+    pub buyer: Address,
+    pub resale_price: i128,
+    pub royalty: i128,
+    pub seller_proceeds: i128,
+    pub token: Address,
+    pub timestamp: u64,
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn publish_ticket_resold_event(
     env: &Env,
+    ticket_id: u64,
+    event_id: u64,
     merchant_id: u64,
+    seller: Address,
+    buyer: Address,
+    resale_price: i128,
+    royalty: i128,
+    seller_proceeds: i128,
     token: Address,
-    amount: i128,
-    recipient: Address,
+    timestamp: u64,
 ) {
-    AutoWithdrawalTriggeredEvent {
+    TicketResoldEvent {
+        ticket_id,
+        event_id,
         merchant_id,
+        seller,
+        buyer,
+        resale_price,
+        royalty,
+        seller_proceeds,
         token,
-        amount,
-        recipient,
-        timestamp: env.ledger().timestamp(),
+        timestamp,
     }
     .publish(env);
 }

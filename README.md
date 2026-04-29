@@ -14,6 +14,7 @@ Shade enables merchants, freelancers, and enterprises to accept digital payments
 - **Merchant Tools**: access to customizable invoices, SDKs for integration, and a comprehensive dashboard.
 - **Permissionless**: No intermediaries; ensuring full control over your funds.
 - **Enhanced Capabilities**: Optional fiat off-ramping and email-based notifications.
+- **Swap-ready Payment Interfaces**: Payment payload types can describe pay-in and settle-out tokens, routing paths, and slippage tolerance for automated swap integrations.
 
 
 ## Getting Started
