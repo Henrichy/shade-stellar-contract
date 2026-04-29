@@ -17,6 +17,18 @@ const MAX_FEE_BPS: u32 = 10_000;
 
 #[derive(Clone)]
 #[contracttype]
+pub struct EscrowConfig {
+    pub buyer: Address,
+    pub seller: Address,
+    pub arbiter: Address,
+    pub terms: String,
+    pub token: Address,
+    pub amount: i128,
+    pub expiry: u64,
+}
+
+#[derive(Clone)]
+#[contracttype]
 enum DataKey {
     Buyer,
     Seller,
