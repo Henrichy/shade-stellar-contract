@@ -8,9 +8,9 @@ use crate::errors::ContractError;
 use crate::events;
 use crate::interface::ShadeTrait;
 use crate::types::{
-    ContractInfo, CrossChainBridgePayload, DataKey, Invoice, InvoiceFilter, Merchant,
-    MerchantAnalytics, MerchantAnalyticsSummary, MerchantFilter, OracleConfig, PendingFee, Role,
-    Subscription, SubscriptionPlan, Transaction
+    ContractInfo, CrossChainBridgePayload, DataKey, Event, Invoice, InvoiceFilter, Merchant,
+    MerchantAnalytics, MerchantAnalyticsSummary, MerchantFilter, OracleConfig, PaymentPayload,
+    PendingFee, Role, Subscription, SubscriptionPlan, Ticket, TokenAnalytics, Transaction,
 };
 use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env, String, Vec};
 
@@ -327,8 +327,8 @@ impl ShadeTrait for Shade {
         invoice_component::pay_invoice_partial(&env, &payer, invoice_id, amount);
     }
 
-    fn validate_payment_payload(env: Env, payload: PaymentPayload) {
-        payment_component::validate_payment_payload(&env, &payload);
+    fn validate_payment_payload(env: Env, payload: crate::types::PaymentPayload) {
+        crate::components::payment::validate_payment_payload(&env, &payload);
     }
 
     fn void_invoice(env: Env, merchant: Address, invoice_id: u64) {
@@ -399,6 +399,11 @@ impl ShadeTrait for Shade {
         subscription_component::cancel_subscription(&env, caller, subscription_id);
     }
 
+    fn deactivate_plan(env: Env, caller: Address, plan_id: u64) {
+        pausable_component::assert_not_paused(&env);
+        subscription_component::deactivate_plan(&env, caller, plan_id);
+    }
+
     fn set_merchant_webhook(env: Env, merchant: Address, webhook: String) {
         pausable_component::assert_not_paused(&env);
         merchant_component::set_merchant_webhook(&env, &merchant, &webhook);
@@ -430,18 +435,141 @@ impl ShadeTrait for Shade {
         history_component::get_user_transactions(&env, user)
     }
     
-    fn emit_cross_chain_bridge_placeholder(
+    fn emit_bridge_placeholder(
         env: Env,
         caller: Address,
         payload: CrossChainBridgePayload,
     ) {
         pausable_component::assert_not_paused(&env);
         caller.require_auth();
-        events::publish_cross_chain_bridge_placeholder_event(
+        events::publish_bridge_placeholder_event(
             &env,
             caller,
             payload,
             env.ledger().timestamp(),
         );
+    }
+
+    // --- Event ticketing system ---
+    #[allow(clippy::too_many_arguments)]
+    fn create_event(
+        env: Env,
+        merchant: Address,
+        name: String,
+        ticket_price: i128,
+        token: Address,
+        capacity: u32,
+        event_date: u64,
+        royalty_bps: u32,
+    ) -> u64 {
+        pausable_component::assert_not_paused(&env);
+        crate::components::event::create_event(
+            &env,
+            &merchant,
+            &name,
+            &ticket_price,
+            &token,
+            &capacity,
+            &event_date,
+            &royalty_bps,
+        )
+    }
+
+    fn purchase_ticket(env: Env, event_id: u64, buyer: Address) -> u64 {
+        pausable_component::assert_not_paused(&env);
+        crate::components::event::purchase_ticket(&env, &event_id, &buyer)
+    }
+
+    fn configure_dynamic_pricing(
+        env: Env,
+        merchant: Address,
+        event_id: u64,
+        early_bird_end: u64,
+        early_bird_discount_bps: u32,
+        late_markup_bps: u32,
+    ) {
+        pausable_component::assert_not_paused(&env);
+        crate::components::event::configure_dynamic_pricing(
+            &env,
+            &merchant,
+            event_id,
+            early_bird_end,
+            early_bird_discount_bps,
+            late_markup_bps,
+        );
+    }
+
+    fn get_current_ticket_price(env: Env, event_id: u64) -> i128 {
+        crate::components::event::get_current_ticket_price(&env, event_id)
+    }
+
+    fn cancel_event_and_batch_refund(env: Env, merchant: Address, event_id: u64) {
+        pausable_component::assert_not_paused(&env);
+        crate::components::event::cancel_event_and_batch_refund(&env, &merchant, event_id);
+    }
+
+    fn resell_ticket(
+        env: Env,
+        seller: Address,
+        buyer: Address,
+        ticket_id: u64,
+        resale_price: i128,
+    ) {
+        pausable_component::assert_not_paused(&env);
+        crate::components::event::resell_ticket(&env, &seller, &buyer, ticket_id, resale_price);
+    }
+
+    fn get_event(env: Env, event_id: u64) -> Event {
+        crate::components::event::get_event(&env, &event_id)
+    }
+
+    fn get_ticket(env: Env, ticket_id: u64) -> Ticket {
+        crate::components::event::get_ticket(&env, ticket_id)
+    }
+
+    fn get_event_tickets(env: Env, event_id: u64) -> Vec<u64> {
+        crate::components::event::get_event_tickets(&env, event_id)
+    }
+
+    fn get_user_tickets(env: Env, user: Address) -> Vec<u64> {
+        crate::components::event::get_user_tickets(&env, &user)
+    }
+    fn purchase_tickets_bulk(
+        env: Env,
+        event_id: u64,
+        buyer: Address,
+        quantity: u32,
+        shade_token: Address,
+        merchant_account: Address,
+    ) {
+        pausable_component::assert_not_paused(&env);
+        crate::components::event::purchase_tickets_bulk(
+            &env,
+            &event_id,
+            &buyer,
+            quantity,
+            &shade_token,
+            &merchant_account,
+        );
+    }
+
+    fn get_token_analytics(env: Env, token: Address) -> TokenAnalytics {
+        admin_component::get_token_analytics(&env, &token)
+    }
+
+    fn get_token_volume(env: Env, token: Address) -> i128 {
+        admin_component::get_token_volume(&env, &token)
+    }
+
+    fn get_token_dominance_metrics(env: Env, tokens: Vec<Address>) -> Vec<(Address, i128)> {
+        admin_component::get_token_dominance_metrics(&env, &tokens)
+    }
+
+    fn get_top_tokens_by_volume(env: Env, limit: u32) -> Vec<(Address, i128)> {
+        admin_component::get_top_tokens_by_volume(&env, limit)
+    }
+
+    fn get_token_market_share(env: Env, token: Address) -> i128 {
+        admin_component::get_token_market_share(&env, &token)
     }
 }
