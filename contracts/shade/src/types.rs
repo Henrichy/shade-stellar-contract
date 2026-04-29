@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, BytesN, String};
+use soroban_sdk::{contracttype, Address, BytesN, String, Vec};
 
 #[contracttype]
 pub enum DataKey {
@@ -37,6 +37,16 @@ pub enum DataKey {
     MerchantAnalyticsSummary(Address),
     PlatformAccount,
     TokenOracle(Address),
+    // --- Event system ---
+    Event(u64),
+    EventCount,
+    Ticket(u64),
+    TicketCount,
+    EventTickets(u64),
+    UserTickets(Address),
+    // --- Global token analytics ---
+    TokenAnalytics(Address),
+    TokenVolume(Address),
 }
 
 #[contracttype]
@@ -56,25 +66,6 @@ pub struct Merchant {
     pub date_registered: u64,
     pub account: Address,
     pub webhook: String,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Invoice {
-    pub id: u64,
-    pub description: soroban_sdk::String,
-    pub amount: i128,
-    pub token: Address,
-    pub status: InvoiceStatus,
-    pub merchant_id: u64,
-    pub payer: Option<Address>,
-    pub date_created: u64,
-    pub date_paid: Option<u64>,
-    pub amount_paid: i128,
-    pub amount_refunded: i128,
-    pub expires_at: Option<u64>,
-    pub pricing_mode: InvoicePricingMode,
-    pub fiat_pricing: Option<FiatPricing>,
 }
 
 #[contracttype]
@@ -104,6 +95,37 @@ pub struct FiatPricing {
     pub currency: String,
     pub amount: i128,
     pub decimals: u32,
+}
+
+/// Soroban-compatible optional wrapper for FiatPricing.
+/// `Option<FiatPricing>` cannot be used directly inside a `#[contracttype]`
+/// struct because the SDK does not implement the required XDR conversions for
+/// `Option<T>` where T is a user-defined struct. An explicit enum variant is
+/// the idiomatic workaround.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum FiatPricingData {
+    None,
+    Some(FiatPricing),
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Invoice {
+    pub id: u64,
+    pub description: soroban_sdk::String,
+    pub amount: i128,
+    pub token: Address,
+    pub status: InvoiceStatus,
+    pub merchant_id: u64,
+    pub payer: Option<Address>,
+    pub date_created: u64,
+    pub date_paid: Option<u64>,
+    pub amount_paid: i128,
+    pub amount_refunded: i128,
+    pub expires_at: Option<u64>,
+    pub pricing_mode: InvoicePricingMode,
+    pub fiat_pricing: FiatPricingData,
 }
 
 #[contracttype]
@@ -191,15 +213,16 @@ pub struct PendingFee {
     pub fee: i128,
     pub proposed_at: u64,
 }
-// ── Subscription engine ───────────────────────────────────────────────────────
+
+// --- Subscription engine ---
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SubscriptionPlan {
     pub id: u64,
-    /// Numeric merchant ID — used to look up the merchant's account contract.
+    /// Numeric merchant ID - used to look up the merchant's account contract.
     pub merchant_id: u64,
-    /// The merchant's wallet address — needed for event emission and auth checks.
+    /// The merchant's wallet address - needed for event emission and auth checks.
     pub merchant: Address,
     /// Human-readable description of the plan.
     pub description: soroban_sdk::String,
@@ -238,6 +261,18 @@ pub enum SubscriptionStatus {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TokenAnalytics {
+    pub token: Address,
+    pub total_volume: i128,
+    pub total_fees: i128,
+    pub transaction_count: u64,
+    pub unique_merchants: u64,
+    pub last_updated: u64,
+}
+
+#[contracttype]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[repr(u32)]
 pub enum TransactionType {
     InvoicePayment = 0,
     SubscriptionCharge = 1,
@@ -253,4 +288,65 @@ pub struct Transaction {
     pub description: soroban_sdk::String,
     pub date: u64,
     pub merchant_id: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Event {
+    pub id: u64,
+    pub merchant_id: u64,
+    pub name: String,
+    pub ticket_price: i128,
+    pub token: Address,
+    pub capacity: u32,
+    pub sold: u32,
+    pub date: u64,
+    /// Scheduled event date (unix seconds). Must be >= ledger timestamp at creation.
+    pub event_date: u64,
+    /// Royalty paid to the organizer on each resale, in basis points (10_000 = 100%).
+    pub royalty_bps: u32,
+    /// Early-bird cutoff timestamp. `0` disables early-bird pricing.
+    pub early_bird_end: u64,
+    /// Discount during early-bird period, in basis points.
+    pub early_bird_discount_bps: u32,
+    /// Markup applied after early-bird period, in basis points.
+    pub late_markup_bps: u32,
+    /// True once the event is cancelled.
+    pub cancelled: bool,
+    /// True once all ticket refunds have been processed.
+    pub refunds_processed: bool,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Ticket {
+    pub id: u64,
+    pub event_id: u64,
+    pub owner: Address,
+    pub minted_at: u64,
+    /// Amount paid on primary purchase, used for cancellation refunds.
+    pub purchase_price: i128,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PaymentRoute {
+    Direct,
+    Swap(SwapRoute),
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SwapRoute {
+    pub router: Address,
+    pub path: Vec<Address>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PaymentPayload {
+    pub input_token: Address,
+    pub settlement_token: Address,
+    pub route: PaymentRoute,
+    pub max_slippage_bps: Option<u32>,
 }

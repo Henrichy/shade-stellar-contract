@@ -1,12 +1,15 @@
 pub mod access_control;
 pub mod account_factory;
 pub mod admin;
+pub mod auto_withdrawal;
 pub mod core;
 pub mod invoice;
 pub mod merchant;
 pub mod pausable;
+pub mod payment;
 pub mod reentrancy;
 pub mod signature_util;
 pub mod subscription;
 pub mod history;
 pub mod upgrade;
+pub mod event;

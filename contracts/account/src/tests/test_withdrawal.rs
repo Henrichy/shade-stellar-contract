@@ -2,7 +2,7 @@
 
 use crate::account::MerchantAccount;
 use crate::account::MerchantAccountClient;
-use soroban_sdk::testutils::{Address as _, Events as _};
+use soroban_sdk::testutils::{Address as _, Events as _, Ledger as _};
 use soroban_sdk::{token, Address, Env};
 
 fn setup_initialized_account(env: &Env) -> (Address, MerchantAccountClient<'_>, Address) {
@@ -19,8 +19,7 @@ fn setup_initialized_account(env: &Env) -> (Address, MerchantAccountClient<'_>, 
 
 fn create_test_token(env: &Env) -> Address {
     let token_admin = Address::generate(env);
-    env.register_stellar_asset_contract_v2(token_admin)
-        .address()
+    env.register_stellar_asset_contract_v2(token_admin).address()
 }
 
 /// Test Case 1: Successful Withdrawal
@@ -48,17 +47,11 @@ fn test_withdraw_to_success_with_balance() {
 
     // Verify balance after withdrawal
     let balance_after = client.get_balance(&token);
-    assert_eq!(
-        balance_after, 2000,
-        "Balance after withdrawal should be 2000"
-    );
+    assert_eq!(balance_after, 2000, "Balance after withdrawal should be 2000");
 
     // Verify recipient received funds
     let recipient_balance = token_client.balance(&recipient);
-    assert_eq!(
-        recipient_balance, 3000,
-        "Recipient should have received 3000"
-    );
+    assert_eq!(recipient_balance, 3000, "Recipient should have received 3000");
 }
 
 /// Test Case 2: Requires Merchant Authentication
@@ -123,17 +116,11 @@ fn test_withdraw_to_exact_balance() {
 
     // Verify balance is now zero
     let balance_after = client.get_balance(&token);
-    assert_eq!(
-        balance_after, 0,
-        "Balance after exact withdrawal should be 0"
-    );
+    assert_eq!(balance_after, 0, "Balance after exact withdrawal should be 0");
 
     // Verify recipient received all funds
     let recipient_balance = token_client.balance(&recipient);
-    assert_eq!(
-        recipient_balance, 1000,
-        "Recipient should have received 1000"
-    );
+    assert_eq!(recipient_balance, 1000, "Recipient should have received 1000");
 }
 
 /// Test Case 5: Multiple Withdrawals
@@ -195,17 +182,11 @@ fn test_withdraw_to_zero_amount() {
 
     // Verify balance unchanged
     let balance = client.get_balance(&token);
-    assert_eq!(
-        balance, 5000,
-        "Balance should remain unchanged after zero withdrawal"
-    );
+    assert_eq!(balance, 5000, "Balance should remain unchanged after zero withdrawal");
 
     // Verify recipient received nothing
     let recipient_balance = token_client.balance(&recipient);
-    assert_eq!(
-        recipient_balance, 0,
-        "Recipient should have received nothing"
-    );
+    assert_eq!(recipient_balance, 0, "Recipient should have received nothing");
 }
 
 /// Test Case 7: Withdrawal to Same Address
@@ -272,13 +253,39 @@ fn test_withdraw_to_restricted_account_panics() {
     let token = create_test_token(&env);
     let recipient = Address::generate(&env);
 
-    // Setup balance
     let token_client = token::StellarAssetClient::new(&env, &token);
-    token_client.mint(&_contract_id, &5000);
+    let contract_address = _contract_id.clone();
+    token_client.mint(&contract_address, &5000);
 
-    // Restrict account
     client.restrict_account(&true);
 
-    // Attempt withdrawal (should panic with AccountRestricted which is #5)
     client.withdraw_to(&token, &1000, &recipient);
+}
+
+/// Test Case 10: Withdrawal Analytics Aggregation
+/// Verify that withdrawal counts and amounts are tracked per token.
+#[test]
+fn test_withdraw_to_tracks_analytics() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(1_000_000);
+
+    let (_contract_id, client, _merchant) = setup_initialized_account(&env);
+    let token = create_test_token(&env);
+
+    let token_client = token::StellarAssetClient::new(&env, &token);
+    let contract_address = _contract_id.clone();
+    token_client.mint(&contract_address, &10000);
+
+    let recipient1 = Address::generate(&env);
+    let recipient2 = Address::generate(&env);
+
+    client.withdraw_to(&token, &2500, &recipient1);
+    client.withdraw_to(&token, &1500, &recipient2);
+
+    let analytics = client.get_withdrawal_analytics(&token);
+    assert_eq!(analytics.token, token);
+    assert_eq!(analytics.total_withdrawn, 4000);
+    assert_eq!(analytics.withdrawal_count, 2);
+    assert_eq!(analytics.last_withdrawn_at, 1_000_000);
 }

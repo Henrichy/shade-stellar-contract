@@ -2,7 +2,8 @@ use crate::components::{access_control, admin, history, merchant, signature_util
 use crate::errors::ContractError;
 use crate::events;
 use crate::types::{
-    DataKey, FiatPricing, Invoice, InvoiceFilter, InvoicePricingMode, InvoiceStatus, Role, Transaction, TransactionType
+    DataKey, FiatPricing, FiatPricingData, Invoice, InvoiceFilter, InvoicePricingMode,
+    InvoiceStatus, Role, Transaction, TransactionType,
 };
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::{contractclient, panic_with_error, token, Address, BytesN, Env, String, Vec};
@@ -28,10 +29,10 @@ fn scale_factor(decimals: u32) -> i128 {
 }
 
 fn resolve_fiat_invoice_amount(env: &Env, invoice: &Invoice) -> i128 {
-    let fiat_pricing = invoice
-        .fiat_pricing
-        .clone()
-        .unwrap_or_else(|| panic_with_error!(env, ContractError::OraclePriceUnavailable));
+    let fiat_pricing = match invoice.fiat_pricing.clone() {
+        FiatPricingData::Some(fp) => fp,
+        FiatPricingData::None => panic_with_error!(env, ContractError::OraclePriceUnavailable),
+    };
     let oracle_config = admin::get_token_oracle(env, &invoice.token);
     let oracle_client = PriceOracleClient::new(env, &oracle_config.contract);
     let price = oracle_client.get_price(&invoice.token, &fiat_pricing.currency);
@@ -160,7 +161,7 @@ pub fn create_invoice(
         amount_refunded: 0,
         expires_at,
         pricing_mode: InvoicePricingMode::FixedCrypto,
-        fiat_pricing: None,
+        fiat_pricing: FiatPricingData::None,
     };
     env.storage()
         .persistent()
@@ -208,7 +209,7 @@ pub fn create_fiat_invoice(
         amount_refunded: 0,
         expires_at,
         pricing_mode: InvoicePricingMode::FixedFiat,
-        fiat_pricing: Some(FiatPricing {
+        fiat_pricing: FiatPricingData::Some(FiatPricing {
             currency: fiat_currency.clone(),
             amount: fiat_amount,
             decimals: fiat_decimals,
@@ -299,7 +300,7 @@ pub fn create_invoice_draft(
         amount_refunded: 0,
         expires_at,
         pricing_mode: InvoicePricingMode::FixedCrypto,
-        fiat_pricing: None,
+        fiat_pricing: FiatPricingData::None,
     };
     env.storage()
         .persistent()
@@ -399,7 +400,7 @@ pub fn create_invoice_signed(
         amount_refunded: 0,
         expires_at: None,
         pricing_mode: InvoicePricingMode::FixedCrypto,
-        fiat_pricing: None,
+        fiat_pricing: FiatPricingData::None,
     };
 
     env.storage()
@@ -746,7 +747,7 @@ pub fn pay_invoice_partial(env: &Env, payer: &Address, invoice_id: u64, amount: 
     events::publish_payment_split_routed_event(
         env,
         invoice_id,
-        merchant_account_id,
+        merchant_account_id.clone(),
         platform_account,
         merchant_amount,
         fee_amount,
@@ -849,6 +850,68 @@ pub fn amend_invoice(
         merchant_address.clone(),
         old_amount,
         invoice.amount,
+        env.ledger().timestamp(),
+    );
+}
+
+pub fn claim_refund(env: &Env, buyer: &Address, invoice_id: u64) {
+    buyer.require_auth();
+
+    let mut invoice = get_invoice(env, invoice_id);
+
+    // Only the original payer (buyer) may claim
+    match &invoice.payer {
+        Some(payer) if payer == buyer => {}
+        _ => panic_with_error!(env, ContractError::NotAuthorized),
+    }
+
+    // Invoice must have an expiration timestamp set
+    let expires_at = match invoice.expires_at {
+        Some(ts) => ts,
+        None => panic_with_error!(env, ContractError::InvoiceExpired),
+    };
+
+    // Expiration must have passed
+    if env.ledger().timestamp() < expires_at {
+        panic_with_error!(env, ContractError::EscrowNotExpired);
+    }
+
+    // Invoice must be in a paid (but unfulfilled) state — Paid or PartiallyPaid
+    if invoice.status != InvoiceStatus::Paid && invoice.status != InvoiceStatus::PartiallyPaid {
+        panic_with_error!(env, ContractError::InvalidInvoiceStatus);
+    }
+
+    // Must not have already been fully refunded
+    let amount_to_refund = invoice.amount_paid - invoice.amount_refunded;
+    if amount_to_refund <= 0 {
+        panic_with_error!(env, ContractError::EscrowAlreadyRefunded);
+    }
+
+    // Check merchant account has sufficient balance
+    let merchant_account = merchant::get_merchant_account(env, invoice.merchant_id);
+    let token_client = TokenClient::new(env, &invoice.token);
+    let merchant_balance = token_client.balance(&merchant_account);
+    if merchant_balance < amount_to_refund {
+        panic_with_error!(env, ContractError::InsufficientBalance);
+    }
+
+    // Execute refund from merchant account back to buyer
+    let refund_client = MerchantAccountRefundClient::new(env, &merchant_account);
+    refund_client.refund(&invoice.token, &amount_to_refund, buyer);
+
+    // Update invoice state
+    invoice.amount_refunded += amount_to_refund;
+    invoice.status = InvoiceStatus::Refunded;
+    env.storage()
+        .persistent()
+        .set(&DataKey::Invoice(invoice_id), &invoice);
+
+    events::publish_escrow_expired_refund_event(
+        env,
+        invoice_id,
+        buyer.clone(),
+        amount_to_refund,
+        invoice.token.clone(),
         env.ledger().timestamp(),
     );
 }

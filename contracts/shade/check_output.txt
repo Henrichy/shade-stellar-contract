@@ -1,0 +1,189 @@
+    Checking shade v0.0.0 (/Users/atec/Desktop/DRIP/shade-stellar-contract/contracts/shade)
+error: custom attribute panicked
+   --> contracts/shade/src/events.rs:619:1
+    |
+619 | #[contractevent]
+    | ^^^^^^^^^^^^^^^^
+    |
+    = help: message: called `Result::unwrap()` on an `Err` value: ()
+
+error: contract function name is too long: 35, max is 32
+   --> contracts/shade/src/interface.rs:164:8
+    |
+164 |     fn emit_cross_chain_bridge_placeholder(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: contract function name is too long: 35, max is 32
+   --> contracts/shade/src/shade.rs:433:8
+    |
+433 |     fn emit_cross_chain_bridge_placeholder(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0432]: unresolved imports `crate::types::PaymentPayload`, `crate::types::PaymentRoute`
+ --> contracts/shade/src/components/payment.rs:2:20
+  |
+2 | use crate::types::{PaymentPayload, PaymentRoute};
+  |                    ^^^^^^^^^^^^^^  ^^^^^^^^^^^^ no `PaymentRoute` in `types`
+  |                    |
+  |                    no `PaymentPayload` in `types`
+
+error[E0432]: unresolved imports `crate::types::PaymentPayload`, `crate::types::PaymentRoute`, `crate::types::SwapRoute`
+ --> contracts/shade/src/tests/test_payment_payload.rs:4:20
+  |
+4 | use crate::types::{PaymentPayload, PaymentRoute, SwapRoute};
+  |                    ^^^^^^^^^^^^^^  ^^^^^^^^^^^^  ^^^^^^^^^ no `SwapRoute` in `types`
+  |                    |               |
+  |                    |               no `PaymentRoute` in `types`
+  |                    no `PaymentPayload` in `types`
+
+error[E0425]: cannot find function `get_merchant_id` in module `core`
+  --> contracts/shade/src/components/event.rs:16:29
+   |
+16 |     let merchant_id = core::get_merchant_id(env, merchant_addr);
+   |                             ^^^^^^^^^^^^^^^ not found in `core`
+   |
+note: these functions exist but are inaccessible
+  --> contracts/shade/src/components/merchant.rs:91:1
+   |
+91 | pub fn get_merchant_id(env: &Env, merchant: &Address) -> u64 {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `crate::shade::__Shade__get_event::merchant_component::get_merchant_id`: not accessible
+   |
+  ::: contracts/shade/src/components/subscription.rs:24:1
+   |
+24 | fn get_merchant_id(env: &Env, merchant: &Address) -> u64 {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `crate::shade::__Shade__get_event::subscription_component::get_merchant_id`: not accessible
+
+error[E0422]: cannot find struct, variant or union type `CrossChainBridgePlaceholderEvent` in this scope
+   --> contracts/shade/src/events.rs:632:5
+    |
+632 |     CrossChainBridgePlaceholderEvent {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find type `PaymentPayload` in this scope
+   --> contracts/shade/src/interface.rs:101:52
+    |
+101 |     fn validate_payment_payload(env: Env, payload: PaymentPayload);
+    |                                                    ^^^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find type `PaymentPayload` in this scope
+   --> contracts/shade/src/shade.rs:330:52
+    |
+330 |     fn validate_payment_payload(env: Env, payload: PaymentPayload) {
+    |                                                    ^^^^^^^^^^^^^^ not found in this scope
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `payment_component`
+   --> contracts/shade/src/shade.rs:331:9
+    |
+331 |         payment_component::validate_payment_payload(&env, &payload);
+    |         ^^^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `payment_component`
+    |
+    = help: if you wanted to use a crate named `payment_component`, use `cargo add payment_component` to add it to your `Cargo.toml`
+
+error[E0277]: the trait bound `soroban_sdk::xdr::ScVal: TryFrom<&core::option::Option<FiatPricing>>` is not satisfied
+  --> contracts/shade/src/types.rs:64:1
+   |
+64 | #[contracttype]
+   | ^^^^^^^^^^^^^^^ the trait `From<FiatPricing>` is not implemented for `soroban_sdk::xdr::ScVal`
+   |
+   = help: the following other types implement trait `From<T>`:
+             `&soroban_sdk::xdr::ScVal` implements `From<soroban_env_common::object::ScValObjRef<'_>>`
+             `soroban_sdk::xdr::ScVal` implements `From<&()>`
+             `soroban_sdk::xdr::ScVal` implements `From<&Fp2>`
+             `soroban_sdk::xdr::ScVal` implements `From<&Fr>`
+             `soroban_sdk::xdr::ScVal` implements `From<&G1Affine>`
+             `soroban_sdk::xdr::ScVal` implements `From<&G2Affine>`
+             `soroban_sdk::xdr::ScVal` implements `From<&bool>`
+             `soroban_sdk::xdr::ScVal` implements `From<&core::option::Option<T>>`
+           and 48 others
+   = note: required for `FiatPricing` to implement `Into<soroban_sdk::xdr::ScVal>`
+   = note: required for `soroban_sdk::xdr::ScVal` to implement `From<&core::option::Option<FiatPricing>>`
+   = note: 1 redundant requirement hidden
+   = note: required for `&core::option::Option<FiatPricing>` to implement `Into<soroban_sdk::xdr::ScVal>`
+   = note: required for `soroban_sdk::xdr::ScVal` to implement `TryFrom<&core::option::Option<FiatPricing>>`
+   = note: required for `&core::option::Option<FiatPricing>` to implement `TryInto<soroban_sdk::xdr::ScVal>`
+   = note: this error originates in the attribute macro `contracttype` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0308]: mismatched types
+   --> contracts/shade/src/tests/test_fiat_pricing.rs:71:9
+    |
+ 66 |     let invoice_id = client.create_fiat_invoice(
+    |                             ------------------- arguments to this method are incorrect
+...
+ 71 |         fiat_decimals,
+    |         ^^^^^^^^^^^^^ expected `&u32`, found integer
+    |
+note: method defined here
+   --> contracts/shade/src/shade.rs:153:8
+    |
+153 |     fn create_fiat_invoice(
+    |        ^^^^^^^^^^^^^^^^^^^
+...
+159 |         fiat_decimals: u32,
+    |         ------------------
+help: consider borrowing here
+    |
+ 71 |         &fiat_decimals,
+    |         +
+
+error[E0308]: mismatched types
+   --> contracts/shade/src/tests/test_fiat_pricing.rs:113:9
+    |
+108 |     client.create_fiat_invoice(
+    |            ------------------- arguments to this method are incorrect
+...
+113 |         2,
+    |         ^ expected `&u32`, found integer
+    |
+note: method defined here
+   --> contracts/shade/src/shade.rs:153:8
+    |
+153 |     fn create_fiat_invoice(
+    |        ^^^^^^^^^^^^^^^^^^^
+...
+159 |         fiat_decimals: u32,
+    |         ------------------
+help: consider borrowing here
+    |
+113 |         &2,
+    |         +
+
+error[E0308]: mismatched types
+   --> contracts/shade/src/tests/test_fiat_pricing.rs:145:9
+    |
+140 |     client.create_fiat_invoice(
+    |            ------------------- arguments to this method are incorrect
+...
+145 |         2,
+    |         ^ expected `&u32`, found integer
+    |
+note: method defined here
+   --> contracts/shade/src/shade.rs:153:8
+    |
+153 |     fn create_fiat_invoice(
+    |        ^^^^^^^^^^^^^^^^^^^
+...
+159 |         fiat_decimals: u32,
+    |         ------------------
+help: consider borrowing here
+    |
+145 |         &2,
+    |         +
+
+warning: unused import: `Ledger`
+ --> contracts/shade/src/tests/test_transaction_history.rs:5:44
+  |
+5 | use soroban_sdk::testutils::{Address as _, Ledger as _};
+  |                                            ^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `Ledger`
+ --> contracts/shade/src/tests/test_fiat_pricing.rs:5:44
+  |
+5 | use soroban_sdk::testutils::{Address as _, Ledger as _};
+  |                                            ^^^^^^
+
+Some errors have detailed explanations: E0277, E0308, E0422, E0425, E0432, E0433.
+For more information about an error, try `rustc --explain E0277`.
+warning: `shade` (lib test) generated 2 warnings
+error: could not compile `shade` (lib test) due to 14 previous errors; 2 warnings emitted
