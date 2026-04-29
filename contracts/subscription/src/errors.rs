@@ -16,4 +16,7 @@ pub enum SubscriptionError {
     ChargeTooEarly = 10,
     InsufficientAllowance = 11,
     TokenNotAccepted = 12,
+    SubscriptionTerminated = 13,
+    GraceNotExpired = 14,
+    NothingToRefund = 15,
 }
