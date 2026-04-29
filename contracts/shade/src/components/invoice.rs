@@ -747,7 +747,7 @@ pub fn pay_invoice_partial(env: &Env, payer: &Address, invoice_id: u64, amount: 
     events::publish_payment_split_routed_event(
         env,
         invoice_id,
-        merchant_account_id,
+        merchant_account_id.clone(),
         platform_account,
         merchant_amount,
         fee_amount,

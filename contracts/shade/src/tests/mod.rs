@@ -4,6 +4,7 @@ pub mod test_access_control;
 pub mod test_account_factory;
 pub mod test_admin_payment;
 pub mod test_admin_transfer;
+pub mod test_auto_withdrawal;
 pub mod test_fee_discount;
 // pub mod test_batch_token_whitelist;
 pub mod test_calculate_fee;
