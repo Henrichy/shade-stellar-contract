@@ -25,6 +25,9 @@ pub struct Plan {
     pub interval: u64,
     pub active: bool,
     pub created_at: u64,
+    /// Seconds a subscription remains in `PastDue` before being terminated.
+    /// `0` means no grace — a failed charge terminates immediately.
+    pub grace_period: u64,
 }
 
 /// An active or cancelled subscription held by a customer.
@@ -38,6 +41,9 @@ pub struct Subscription {
     pub created_at: u64,
     /// Timestamp of the last successful charge; 0 means never charged.
     pub last_charged: u64,
+    /// Timestamp at which the subscription entered `PastDue`. `0` if not
+    /// currently past due. Used to enforce the plan's grace period.
+    pub past_due_since: u64,
 }
 
 #[contracttype]
@@ -46,4 +52,30 @@ pub struct Subscription {
 pub enum SubscriptionStatus {
     Active = 0,
     Cancelled = 1,
+    /// Charge attempt failed; subscription is in the plan's grace window.
+    /// Recovery via a fresh allowance restores it to Active.
+    PastDue = 2,
+    /// Grace window expired without payment; subscription is permanently
+    /// terminated and can no longer be charged or recovered.
+    Terminated = 3,
+}
+
+/// Outcome of a single billing cycle attempt. Returned by `process_charge`
+/// so callers (typically off-chain billing bots) can react without parsing
+/// emitted events.
+#[contracttype]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[repr(u32)]
+pub enum ChargeOutcome {
+    /// A charge was completed and `last_charged` updated.
+    Charged = 0,
+    /// The cycle hadn't elapsed yet — no state change.
+    NotDueYet = 1,
+    /// Charge failed for insufficient allowance and the subscription
+    /// transitioned (or stayed) in `PastDue` within its grace window.
+    EnteredGrace = 2,
+    /// A previously past-due subscription recovered and was charged.
+    Recovered = 3,
+    /// Grace window expired without payment; subscription was terminated.
+    Terminated = 4,
 }
